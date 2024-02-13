@@ -223,24 +223,6 @@ void ExecuteMenu() {
     DestroyMenu(hMenu);
 }
 
-
-bool IsDarkMode()
-{
-    HKEY hKey;
-    DWORD dwValue = 0;
-    DWORD dwSize = sizeof(dwValue);
-    LONG lResult = RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &hKey);
-    if (lResult == ERROR_SUCCESS)
-    {
-        lResult = RegGetValue(hKey, NULL, L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &dwValue, &dwSize);
-        if (lResult == ERROR_SUCCESS)
-        {
-            return dwValue == 0;
-        }
-    }
-    return false;
-}
-
 void setLVItems(HWND hwndList) {
     ListView_DeleteAllItems(hwndList);
 
@@ -261,8 +243,6 @@ void setLVItems(HWND hwndList) {
 
     }
 }
-
-
 
 bool appCheck(HWND lParam) {
     wchar_t windowName[256];
@@ -558,7 +538,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
 
     // window parameters
     int width = 300;
-    int height = 400;
+    int height = 350;
     int buttonHeight = 50;
     int radioHeight = 25;
     int padding = 20;
@@ -599,6 +579,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         return 0;
     }
 
+    // create main window
     hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, x, y, width, height, NULL, NULL, hInstance, NULL);
     if (!hwndMain) {
         MessageBox(NULL, L"Error creating window.", NAME, MB_OK | MB_ICONERROR);
@@ -612,6 +593,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     GetClientRect(hwndMain, &clientRect);
     int dx = width - clientRect.right + 1;
     int dy = height - clientRect.bottom;
+    width -= dx - 2;
 
 
     // add two radio buttons center aligned
@@ -631,29 +613,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     lvc.iSubItem = 0;
     ListView_InsertColumn(hwndList, 0, &lvc);
     setLVItems(hwndList);
-    ListView_SetExtendedListViewStyle(hwndList, LVS_EX_FULLROWSELECT);
+    ListView_SetExtendedListViewStyle(hwndList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
 
     // create save button
     HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, height - (buttonHeight + dy), width, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
 
-
     // handle dark mode
-    COLORREF c1 = GetSysColor(COLOR_BTNFACE);
-    COLORREF c2 = GetSysColor(COLOR_WINDOWTEXT);
+    COLORREF c1 = RGB(255, 255, 255);
+    COLORREF c2 = RGB(20, 20, 20);
     COLORREF temp;
-    if (IsDarkMode()) {
-        temp = c2;
-        c2 = c1;
-        c1 = temp;
-    }
 
     ListView_SetBkColor(hwndList, c1);
     ListView_SetTextBkColor(hwndList, c1);
     ListView_SetTextColor(hwndList, c2);
-    SetClassLongPtr(hwndButton, GCLP_HBRBACKGROUND, (LONG_PTR)CreateSolidBrush(c1));
-    SetClassLongPtr(hwndList, GCLP_HBRBACKGROUND, (LONG_PTR)CreateSolidBrush(c1));
-    SetClassLongPtr(hwndRadio1, GCLP_HBRBACKGROUND, (LONG_PTR)CreateSolidBrush(c1));
-    SetClassLongPtr(hwndRadio2, GCLP_HBRBACKGROUND, (LONG_PTR)CreateSolidBrush(c1));
+
+    // set button and radio button colors
+    SendMessage(hwndButton, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hwndRadio1, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hwndRadio2, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     // MinimizeAll();
     MinimizeWindowToTray(hwndMain);
