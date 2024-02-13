@@ -329,10 +329,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case IDM_ABOUT:
             ShellExecute(NULL, L"open", ABOUT_URL, NULL, NULL, SW_SHOWNORMAL);
             break;
-        case ID_APPLIST:
-        {
-            break;
-        }
         case ID_RADIO1:
             SendMessage(GetDlgItem(hwnd, ID_RADIO2), BM_SETCHECK, BST_UNCHECKED, 0);
             HOOKBOTH = false;
@@ -387,17 +383,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         break;
-    case WM_HOTKEY:
+    case WM_SYSCOMMAND:
     {
-        HWND fgWnd = GetForegroundWindow();
-        if (!fgWnd)
-            break;
-
-        LONG style = GetWindowLong(fgWnd, GWL_STYLE);
-        if (!(style & WS_MINIMIZEBOX)) {
-            break;
+        if (wParam == SC_CLOSE) {
+            SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
         }
-        MinimizeWindowToTray(fgWnd);
         break;
     }
     case WM_NOTIFY:
