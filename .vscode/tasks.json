@@ -1,0 +1,151 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Project Release",
+            "type": "shell",
+            "command": "echo",
+            "args": [
+                "Success"
+            ],
+            "dependsOn": [
+                "Build exe"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build Project Debug",
+            "type": "shell",
+            "command": "echo",
+            "args": [
+                "Success"
+            ],
+            "dependsOn": [
+                "Build exe Debug"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/C",
+                "del",
+                "/F",
+                "/Q",
+                "Trayy.exe",
+                "hook.dll",
+                "hook.obj",
+                "Trayy.res",
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Build exe Debug",
+            "type": "cppbuild",
+            "command": "cl",
+            "args": [
+                "Trayy.cpp",
+                "Trayy.res",
+                "/EHsc",
+                "/Zi",
+                "/nologo",
+                "/Fe:Trayy.exe",
+                "/link",
+                "hook.lib",
+                "User32.lib",
+                "Shlwapi.lib",
+                "Advapi32.lib",
+                "Shell32.lib",
+            ],
+            "dependsOn": [
+                "Build hook",
+                "Build res",
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build exe",
+            "type": "cppbuild",
+            "command": "cl",
+            "args": [
+                "Trayy.cpp",
+                "Trayy.res",
+                "/EHsc",
+                "/nologo",
+                "/O2",
+                "/Fe:Trayy.exe",
+                "/link",
+                "hook.lib",
+                "User32.lib",
+                "Shlwapi.lib",
+                "Advapi32.lib",
+                "Shell32.lib",
+            ],
+            "dependsOn": [
+                "Build hook",
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build hook",
+            "type": "cppbuild",
+            "command": "link",
+            "args": [
+                "/DLL",
+                "/nologo",
+                "/out:hook.dll",
+                "hook.obj",
+                "User32.lib",
+            ],
+            "dependsOn": [
+                "Build hook obj"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [
+                "$msCompile"
+            ]
+        },
+        {
+            "label": "Build hook obj",
+            "type": "cppbuild",
+            "command": "cl",
+            "args": [
+                "/c",
+                "/EHsc",
+                "hook.cpp"
+            ],
+            "dependsOn": [
+                "Build res"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [
+                "$msCompile"
+            ]
+        },
+        {
+            "label": "Build res",
+            "type": "shell",
+            "command": "rc",
+            "args": [
+                "/fo",
+                "Trayy.res",
+                "Trayy.rc"
+            ],
+            "dependsOn": [
+                "Clean"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [
+                "$msCompile"
+            ]
+        }
+    ]
+}
