@@ -1,0 +1,12 @@
+*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.gitignore
+!LICENSE
+!README.md
+!logo.ico
+!Trayy.cpp
+!hook.cpp
+!Trayy.h
+!demo.png
+!Trayy.rc
