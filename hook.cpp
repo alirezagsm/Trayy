@@ -24,6 +24,14 @@
 static HHOOK _hMouse = NULL;
 static HWND _hLastHit = NULL;
 
+void ActivateWindow(HWND hwnd) {
+    if (GetForegroundWindow() != hwnd) {
+        if (IsIconic(hwnd)) {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        SetForegroundWindow(hwnd);
+    }
+}
 
 // Works for 32-bit and 64-bit apps
 LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -34,7 +42,7 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             }
             else {
                 BOOL isHitMin = (info->wHitTestCode == HTMINBUTTON);
-                BOOL isHitX = (info->wHitTestCode == HTCLOSE); 
+                BOOL isHitX = (info->wHitTestCode == HTCLOSE);
                 if ((wParam == WM_NCLBUTTONDOWN) && (isHitMin || isHitX)) {
                     _hLastHit = info->hwnd;
                     return 1;
@@ -42,9 +50,11 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 else if ((wParam == WM_NCLBUTTONUP) && (isHitMin || isHitX)) {
                     if (info->hwnd == _hLastHit) {
                         if (isHitMin) {
+                            ActivateWindow(info->hwnd);
                             PostMessage(FindWindow(NAME, NAME), WM_MIN, 0, (LPARAM)info->hwnd);
                         }
                         else {
+                            ActivateWindow(info->hwnd);
                             PostMessage(FindWindow(NAME, NAME), WM_X, 0, (LPARAM)info->hwnd);
                         }
                     }

@@ -31,7 +31,8 @@
 #include <set>
 #include <sddl.h>
 #include <stdio.h>
-#include <time.h>
+#include <psapi.h>
+#include <iostream>
 
 
 #pragma comment(lib, "Gdi32.lib")
@@ -48,6 +49,8 @@ static HWND hwndForMenu;
 static std::vector<std::wstring> appNames;
 
 static bool HOOKBOTH = true;
+static bool NOTASKBAR = false;
+static bool NOTSAKBAR_changed = false;
 
 int FindInTray(HWND hwnd) {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
@@ -159,6 +162,20 @@ static bool RemoveWindowFromTray(HWND hwnd) {
 }
 
 static void RestoreWindowFromTray(HWND hwnd) {
+    if (NOTASKBAR) {
+        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        exStyle |= WS_EX_TOOLWINDOW; // Add WS_EX_TOOLWINDOW extended style
+        exStyle &= ~(WS_EX_APPWINDOW); // Add WS_EX_TOOLWINDOW extended style
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+        NOTSAKBAR_changed = true;
+    }
+    else if (NOTSAKBAR_changed) {
+        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        exStyle &= ~(WS_EX_TOOLWINDOW); // Remove WS_EX_TOOLWINDOW extended style
+        exStyle |= WS_EX_APPWINDOW; // Add WS_EX_TOOLWINDOW extended style
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+        NOTSAKBAR_changed = false;
+    }
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
 }
@@ -248,17 +265,47 @@ bool appCheck(HWND lParam) {
     wchar_t windowName[256];
     GetWindowText(lParam, windowName, 256);
 
-    for (const auto& appName : appNames) {
-        if (wcslen(appName.c_str()) > 0 && wcsstr(windowName, appName.c_str()) != nullptr) {
-            return true;
-        }
-        if (wcscmp(windowName, NAME) == 0) {
-            return true;
+    if (!IsWindowVisible(lParam)) {
+        return false;
+    }
+
+    DWORD processId;
+    GetWindowThreadProcessId(lParam, &processId);
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+    if (hProcess == NULL)
+        return false;
+
+    TCHAR processName[MAX_PATH] = L"";
+    HMODULE hMod;
+    DWORD cbNeeded;
+
+    if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
+    {
+        GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
+    }
+
+    CloseHandle(hProcess);
+    std::vector<std::wstring> BrowserNames = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
+    // change to window title if it's a browser
+    for (const auto& browser : BrowserNames) {
+        if (wcscmp(processName, browser.c_str()) == 0) {
+            wcscpy(processName, windowName);
+            break;
         }
     }
 
+    for (const auto& appName : appNames) {
+        if (wcslen(appName.c_str()) > 0 && wcsstr(processName, appName.c_str()) != nullptr) {
+            return true;
+        }
+    }
+    if (wcscmp(processName, NAME L".exe") == 0 && wcscmp(windowName, NAME) == 0) {
+        return true;
+    }
     return false;
 }
+
 void MinimizeAll() {
     HWND hwnd = GetTopWindow(NULL);
     while (hwnd) {
@@ -269,7 +316,7 @@ void MinimizeAll() {
     }
 }
 
-void SaveCallback(HWND hwnd)
+void ButtonCallback(HWND hwnd)
 {
     appNames.clear();
     std::wofstream file(L"apps.ini");
@@ -284,6 +331,7 @@ void SaveCallback(HWND hwnd)
         }
     }
     file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
     for (const auto& appName : uniqueAppNames) {
         appNames.push_back(appName);
         file << appName << std::endl;
@@ -294,6 +342,36 @@ void SaveCallback(HWND hwnd)
     MinimizeAll();
     MinimizeWindowToTray(hwndMain);
 
+}
+
+BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam) {
+    char className[256];
+    GetClassNameA(hwnd, className, sizeof(className));
+    if (strcmp(className, "TrayNotifyWnd") == 0) {
+        EnumChildWindows(hwnd, EnumChildProc, lParam);
+    }
+    else if (strcmp(className, "SysPager") == 0) {
+        EnumChildWindows(hwnd, EnumChildProc, lParam);
+    }
+    else if (strcmp(className, "ToolbarWindow32") == 0) {
+        RECT r;
+        GetClientRect(hwnd, &r);
+        for (LONG x = 0; x < r.right; x += 5) {
+            for (LONG y = 0; y < r.bottom; y += 5) {
+                LPARAM lParam = MAKELPARAM(x, y);
+                SendMessage(hwnd, WM_MOUSEMOVE, 0, lParam);
+            }
+        }
+    }
+    return TRUE;
+}
+
+void RefreshTray() {
+    std::thread t([]() {
+        HWND taskbar = FindWindow(L"Shell_TrayWnd", NULL);
+        EnumChildWindows(taskbar, EnumChildProc, 0);
+        });
+    t.join();
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -309,19 +387,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case IDM_ABOUT:
             ShellExecute(NULL, L"open", ABOUT_URL, NULL, NULL, SW_SHOWNORMAL);
             break;
-        case ID_RADIO1:
-            SendMessage(GetDlgItem(hwnd, ID_RADIO2), BM_SETCHECK, BST_UNCHECKED, 0);
-            HOOKBOTH = false;
+        case ID_CHECKBOX1:
+            HOOKBOTH = IsDlgButtonChecked(hwnd, ID_CHECKBOX1) == BST_CHECKED;
             break;
-        case ID_RADIO2:
-            SendMessage(GetDlgItem(hwnd, ID_RADIO1), BM_SETCHECK, BST_UNCHECKED, 0);
-            HOOKBOTH = true;
+        case ID_CHECKBOX2:
+            NOTASKBAR = IsDlgButtonChecked(hwnd, ID_CHECKBOX2) == BST_CHECKED;
             break;
         case IDM_EXIT:
             SendMessage(hwnd, WM_DESTROY, 0, 0);
             break;
         case ID_BUTTON:
-            SaveCallback(hwnd);
+            ButtonCallback(hwnd);
             break;
         }
         break;
@@ -352,8 +428,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_TRAYCMD:
         switch ((UINT)lParam) {
         case NIN_SELECT:
-            RestoreWindowFromTray(hwndItems[wParam]);
+        {
+            // wchar_t windowName[256];
+            // HWND hwnd_ = GetTopWindow(NULL);
+            // while (hwnd_) {
+            //     hwnd_ = GetNextWindow(hwnd_, GW_HWNDNEXT);
+            //     GetWindowText(hwnd_, windowName, 256);
+            // }
+            // if window is selected, minimize it, otherwise show its
+            if (IsWindowVisible(hwndItems[wParam])) {
+                MinimizeWindowToTray(hwndItems[wParam]);
+            }
+            else {
+                RestoreWindowFromTray(hwndItems[wParam]);
+            }
             break;
+        }
         case WM_CONTEXTMENU:
             hwndForMenu = hwndItems[wParam];
             ExecuteMenu();
@@ -462,17 +552,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     break;
     case WM_DESTROY:
+    {
+        NOTASKBAR = false;
         for (int i = 0; i < MAXTRAYITEMS; i++) {
             if (hwndItems[i]) {
                 RestoreWindowFromTray(hwndItems[i]);
+                RemoveWindowFromTray(hwndItems[i]);
             }
         }
         if (hLib) {
             UnRegisterHook();
             FreeLibrary(hLib);
         }
+        RefreshTray();
         PostQuitMessage(0);
         break;
+    }
     default:
         if (msg == WM_TASKBAR_CREATED) {
             for (int i = 0; i < MAXTRAYITEMS; i++) {
@@ -489,9 +584,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 // Wait for windows startup on first launch
 void MinimizeAllInBackground() {
-    std::this_thread::sleep_for(std::chrono::seconds(3));
-    MinimizeAll();
+    std::thread t([]() {
+        Sleep(3000);
+        MinimizeAll();
+        });
+    t.detach();
 }
+
+
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/) {
 
@@ -499,6 +599,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     std::wstring line;
     std::getline(file, line);
     HOOKBOTH = line.find(L"true") != std::string::npos;
+    std::getline(file, line);
+    NOTASKBAR = line.find(L"true") != std::string::npos;
 
     while (std::getline(file, line))
     {
@@ -510,7 +612,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
 
 
 
-    SetProcessDPIAware();
     bool shouldExit = false;
 
 
@@ -535,12 +636,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         return 0;
     }
 
-
     // window parameters
     int width = 300;
     int height = 350;
     int buttonHeight = 50;
-    int radioHeight = 25;
+    int boxHeight = 25;
     int padding = 20;
     int nApps = 20;
 
@@ -586,24 +686,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         return 0;
     }
 
-    HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
 
     // get real client size
     RECT clientRect;
     GetClientRect(hwndMain, &clientRect);
     int dx = width - clientRect.right + 1;
     int dy = height - clientRect.bottom;
-    width -= dx - 2;
+    width -= dx - 5;
 
 
-    // add two radio buttons center aligned
-    HWND hwndRadio1 = CreateWindowEx(0, L"BUTTON", L"Hook Minimize", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 0, 0, width, radioHeight, hwndMain, (HMENU)ID_RADIO1, hInstance, NULL);
-    HWND hwndRadio2 = CreateWindowEx(0, L"BUTTON", L"Hook Minimize and Close", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 0, radioHeight, width, radioHeight, hwndMain, (HMENU)ID_RADIO2, hInstance, NULL);
-    SendMessage(hwndRadio1, BM_SETCHECK, HOOKBOTH ? BST_UNCHECKED : BST_CHECKED, 0);
-    SendMessage(hwndRadio2, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
+    // add two checkboxes
+    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
+    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, boxHeight, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
+    SendMessage(hwndCheckbox1, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
 
     // create list view
-    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER, 0, 2 * radioHeight, width, height - (buttonHeight + radioHeight + radioHeight + dy), hwndMain, (HMENU)ID_GUI, hInstance, NULL);
+    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER, 0, 2 * boxHeight, width, height - (buttonHeight + boxHeight + boxHeight + dy), hwndMain, (HMENU)ID_GUI, hInstance, NULL);
 
     LVCOLUMN lvc;
     lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
@@ -618,24 +717,25 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     // create save button
     HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, height - (buttonHeight + dy), width, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
 
-    // handle dark mode
+    // set colors
     COLORREF c1 = RGB(255, 255, 255);
     COLORREF c2 = RGB(20, 20, 20);
-    COLORREF temp;
 
     ListView_SetBkColor(hwndList, c1);
     ListView_SetTextBkColor(hwndList, c1);
     ListView_SetTextColor(hwndList, c2);
 
-    // set button and radio button colors
-    SendMessage(hwndButton, WM_SETFONT, (WPARAM)hFont, TRUE);
-    SendMessage(hwndRadio1, WM_SETFONT, (WPARAM)hFont, TRUE);
-    SendMessage(hwndRadio2, WM_SETFONT, (WPARAM)hFont, TRUE);
+    // set fonts
+    HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    HFONT hFont_bold = CreateFont(16, 0, 0, 0, FW_DEMIBOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    SendMessage(hwndList, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hwndButton, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
+    SendMessage(hwndCheckbox1, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
+    SendMessage(hwndCheckbox2, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
 
-    // MinimizeAll();
     MinimizeWindowToTray(hwndMain);
-    std::thread t(MinimizeAllInBackground);
-    t.detach();
+    RefreshTray();
+    MinimizeAllInBackground();
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {

@@ -6,10 +6,31 @@
         {
             "label": "Build Project Release",
             "type": "shell",
-            "command": "echo",
+            "command": "cmd",
             "args": [
+                "/C",
+                "copy",
+                "/Y",
+                "Trayy.exe",
+                "bin\\",
+                "&&",
+                "copy",
+                "/Y",
+                "hook.dll",
+                "bin\\",
+                "&&",
+                "echo",
                 "Done!"
             ],
+            "options": {
+                "shell": {
+                    "executable": "C:\\Windows\\System32\\cmd.exe",
+                    "args": [
+                        "/d",
+                        "/c"
+                    ]
+                }
+            },
             "dependsOn": [
                 "Build exe"
             ],

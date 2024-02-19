@@ -28,8 +28,8 @@
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
 #define IDI_ICON1       101
-#define ID_RADIO1       102
-#define ID_RADIO2       103
+#define ID_CHECKBOX1    102
+#define ID_CHECKBOX2    103
 #define ID_BUTTON       104
 #define ID_APPLIST      105
 #define ID_GUI          106
