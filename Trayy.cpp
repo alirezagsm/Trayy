@@ -1,8 +1,8 @@
 
 // Trayy v1.0
-// Copyright(C) 2024 alirezagsm
+// Copyright(C) 2024 A. Ghasemi
 
-// Based on RBTray v4.14 with the following acknowledgements:
+// Based on RBTray v4.14 with the following attribution:
 // Copyright (C) 1998-2010  Nikolay Redko, J.D. Purcell
 // Copyright (C) 2015 Benbuck Nason
 
@@ -24,19 +24,13 @@
 #include <string>
 #include <fstream>
 #include <CommCtrl.h>
-#include "WinBase.h"
-#include "uxtheme.h"
 #include <shellapi.h>
 #include <thread>
 #include <set>
-#include <sddl.h>
 #include <stdio.h>
 #include <psapi.h>
-#include <iostream>
-
 
 #pragma comment(lib, "Gdi32.lib")
-
 
 static UINT WM_TASKBAR_CREATED;
 
@@ -374,6 +368,25 @@ void RefreshTray() {
     t.join();
 }
 
+bool IsTopWindow(HWND hwnd) {
+    HWND hwndTopmost = NULL;
+    HWND hwnd_ = GetTopWindow(0);
+    wchar_t name_[256];
+    GetWindowText(hwnd_, name_, 256);
+    while (hwnd_) {
+        if (wcslen(name_) > 0 && IsWindowVisible(hwnd_)) {
+            hwndTopmost = hwnd_;
+            break;
+        }
+        hwnd_ = GetNextWindow(hwnd_, GW_HWNDNEXT);
+        GetWindowText(hwnd_, name_, 256);
+    }
+    if (hwndTopmost == hwnd) {
+        return true;
+    }
+    return false;
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_COMMAND:
@@ -429,15 +442,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         switch ((UINT)lParam) {
         case NIN_SELECT:
         {
-            // wchar_t windowName[256];
-            // HWND hwnd_ = GetTopWindow(NULL);
-            // while (hwnd_) {
-            //     hwnd_ = GetNextWindow(hwnd_, GW_HWNDNEXT);
-            //     GetWindowText(hwnd_, windowName, 256);
-            // }
-            // if window is selected, minimize it, otherwise show its
             if (IsWindowVisible(hwndItems[wParam])) {
-                MinimizeWindowToTray(hwndItems[wParam]);
+                if (IsTopWindow(hwndItems[wParam])) {
+                    MinimizeWindowToTray(hwndItems[wParam]);
+                }
+                else {
+                    SetForegroundWindow(hwndItems[wParam]);
+                }
             }
             else {
                 RestoreWindowFromTray(hwndItems[wParam]);
@@ -591,8 +602,6 @@ void MinimizeAllInBackground() {
     t.detach();
 }
 
-
-
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/) {
 
     std::wifstream file(L"apps.ini");
@@ -686,14 +695,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         return 0;
     }
 
-
     // get real client size
-    RECT clientRect;
-    GetClientRect(hwndMain, &clientRect);
-    int dx = width - clientRect.right + 1;
-    int dy = height - clientRect.bottom;
-    width -= dx - 5;
-
+    int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
+    int scrollBarHeight = GetSystemMetrics(SM_CYHSCROLL);
+    width -= scrollBarWidth;
+    height -= scrollBarHeight;
 
     // add two checkboxes
     HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
@@ -702,12 +708,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
 
     // create list view
-    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER, 0, 2 * boxHeight, width, height - (buttonHeight + boxHeight + boxHeight + dy), hwndMain, (HMENU)ID_GUI, hInstance, NULL);
+    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER, 0, 2 * boxHeight, width, height - (buttonHeight + boxHeight + boxHeight + scrollBarHeight), hwndMain, (HMENU)ID_GUI, hInstance, NULL);
 
     LVCOLUMN lvc;
     lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
     lvc.fmt = LVCFMT_LEFT;
-    lvc.cx = width - dx;
+    lvc.cx = width - scrollBarWidth;
     lvc.pszText = (LPWSTR)L"";
     lvc.iSubItem = 0;
     ListView_InsertColumn(hwndList, 0, &lvc);
@@ -715,7 +721,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     ListView_SetExtendedListViewStyle(hwndList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
 
     // create save button
-    HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, height - (buttonHeight + dy), width, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
+    HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, height - (buttonHeight + scrollBarHeight), width, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
 
     // set colors
     COLORREF c1 = RGB(255, 255, 255);

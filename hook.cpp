@@ -1,8 +1,8 @@
 
 // Trayy v1.0
-// Copyright(C) 2024 alirezagsm
+// Copyright(C) 2024 A. Ghasemi
 
-// A fork of RBTray v4.14 with the following attribution:
+// Based on RBTray v4.14 with the following attribution:
 // Copyright (C) 1998-2010  Nikolay Redko, J.D. Purcell
 // Copyright (C) 2015 Benbuck Nason
 
@@ -72,7 +72,6 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     return CallNextHookEx(_hMouse, nCode, wParam, lParam);
 }
-
 
 BOOL DLLIMPORT RegisterHook(HMODULE hLib) {
     _hMouse = SetWindowsHookEx(WH_MOUSE, (HOOKPROC)MouseProc, hLib, 0);
