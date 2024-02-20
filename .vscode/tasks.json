@@ -9,6 +9,7 @@
             "type": "shell",
             "command": "powershell.exe",
             "args": [
+                "if (!(Test-Path -Path bin)) { New-Item -ItemType Directory -Path bin; }",
                 "Copy-Item -Path Trayy.exe -Destination bin\\ -Force;",
                 "Copy-Item -Path hook.dll -Destination bin\\ -Force;",
                 "Compress-Archive -Path bin\\Trayy.exe,bin\\hook.dll -DestinationPath bin\\Trayy.zip -Force;",
@@ -135,6 +136,7 @@
             "command": "cl",
             "args": [
                 "/c",
+                "/nologo",
                 "/EHsc",
                 "hook.cpp"
             ],

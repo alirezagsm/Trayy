@@ -722,7 +722,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     ListView_SetBkColor(hwndList, c3);
     ListView_SetTextBkColor(hwndList, c1);
     ListView_SetTextColor(hwndList, c2);
-    SetClassLongPtr(hwndMain, GCLP_HBRBACKGROUND, (LONG)CreateSolidBrush(c3));
+    SetClassLongPtr(hwndMain, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(CreateSolidBrush(c3)));
 
     // set fonts
     HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
