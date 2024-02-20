@@ -22,7 +22,7 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 ## 🚀 Getting Started
 
 1. Kick things off by downloading `Trayy.zip` and unzipping it to reveal the magic inside!
-2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder, then run the app to get the party started.
+2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise an eyebrow but fear not! Trayy is harmless and also open source. Run the app to get the party started. 
 3. Time to pick your superpowers:
    - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray.
    - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
