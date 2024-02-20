@@ -16,6 +16,7 @@
             ],
             "options": {
                 "shell": {
+                    "executable": "powershell.exe",
                     "args": [
                         "-NoProfile",
                         "-ExecutionPolicy",
@@ -45,12 +46,13 @@
         {
             "label": "Clean",
             "type": "shell",
-            "command": "powershell.exe",
+            "command": "",
             "args": [
                 "Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res -Force -ErrorAction SilentlyContinue"
             ],
             "options": {
                 "shell": {
+                    "executable": "powershell.exe",
                     "args": [
                         "-NoProfile",
                         "-ExecutionPolicy",

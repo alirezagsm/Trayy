@@ -2,7 +2,7 @@
 // Trayy v1.0
 // Copyright(C) 2024 A. Ghasemi
 
-// Based on RBTray v4.14 with the following attribution:
+// Based on RBTray with the following attribution:
 // Copyright (C) 1998-2010  Nikolay Redko, J.D. Purcell
 // Copyright (C) 2015 Benbuck Nason
 
@@ -313,7 +313,7 @@ void MinimizeAll() {
 void ButtonCallback(HWND hwnd)
 {
     appNames.clear();
-    std::wofstream file(L"apps.ini");
+    std::wofstream file(L"settings.ini");
     std::set<std::wstring> uniqueAppNames;
 
     for (int i = 0; i < ListView_GetItemCount(GetDlgItem(hwnd, ID_GUI)); i++)
@@ -447,6 +447,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     MinimizeWindowToTray(hwndItems[wParam]);
                 }
                 else {
+                    ShowWindow(hwndItems[wParam], SW_RESTORE);
                     SetForegroundWindow(hwndItems[wParam]);
                 }
             }
@@ -604,7 +605,7 @@ void MinimizeAllInBackground() {
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/) {
 
-    std::wifstream file(L"apps.ini");
+    std::wifstream file(L"settings.ini");
     std::wstring line;
     std::getline(file, line);
     HOOKBOTH = line.find(L"true") != std::string::npos;
@@ -619,22 +620,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         }
     }
 
-
-
     bool shouldExit = false;
-
-
     hwndMain = FindWindow(NAME, NAME);
     if (hwndMain) {
-        if (shouldExit) {
-            SendMessage(hwndMain, WM_CLOSE, 0, 0);
-        }
-        else {
-            MessageBox(NULL, L"Trayy is already running.", NAME, MB_OK | MB_ICONINFORMATION);
-        }
+        RefreshTray();
+        MessageBox(NULL, L"Trayy is already running.", NAME, MB_OK | MB_ICONINFORMATION);
         return 0;
     }
-
 
     if (!(hLib = LoadLibrary(L"hook.dll"))) {
         MessageBox(NULL, L"Error loading hook.dll.", NAME, MB_OK | MB_ICONERROR);
@@ -650,27 +642,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     int height = 350;
     int buttonHeight = 50;
     int boxHeight = 25;
-    int padding = 20;
-    int nApps = 20;
+    int desktopPadding = 20;
+    int leftPadding = 5;
+    int safetyMargin = 2;
 
     RECT rect;
     HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
     GetWindowRect(taskbar, &rect);
-    int x = rect.right - width - padding;
+    int x = rect.right - width - desktopPadding;
     int y;
     if (rect.top == 0) {
-        y = rect.bottom + padding;
+        y = rect.bottom + desktopPadding;
     }
     else {
-        y = rect.top - height - padding;
+        y = rect.top - height - desktopPadding;
     }
-
 
     for (int i = 0; i < MAXTRAYITEMS; i++) {
         hwndItems[i] = NULL;
     }
     WM_TASKBAR_CREATED = RegisterWindowMessage(L"TaskbarCreated");
-
 
     WNDCLASS wc;
     wc.style = 0;
@@ -698,12 +689,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     // get real client size
     int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
     int scrollBarHeight = GetSystemMetrics(SM_CYHSCROLL);
-    width -= scrollBarWidth;
-    height -= scrollBarHeight;
+    width -= scrollBarWidth - safetyMargin;
+    height -= scrollBarHeight - safetyMargin;
 
     // add two checkboxes
-    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
-    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, boxHeight, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
+    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, leftPadding, 0, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
+    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, leftPadding, boxHeight, width, boxHeight, hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
     SendMessage(hwndCheckbox1, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
 
@@ -721,15 +712,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     ListView_SetExtendedListViewStyle(hwndList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
 
     // create save button
-    HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, height - (buttonHeight + scrollBarHeight), width, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
+    HWND hwndButton = CreateWindowEx(0, L"BUTTON", L"Save", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, -safetyMargin, height - (buttonHeight + scrollBarHeight), width + safetyMargin, buttonHeight, hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
 
     // set colors
     COLORREF c1 = RGB(255, 255, 255);
     COLORREF c2 = RGB(20, 20, 20);
+    COLORREF c3 = GetSysColor(COLOR_BTNFACE);
 
-    ListView_SetBkColor(hwndList, c1);
+    ListView_SetBkColor(hwndList, c3);
     ListView_SetTextBkColor(hwndList, c1);
     ListView_SetTextColor(hwndList, c2);
+    SetClassLongPtr(hwndMain, GCLP_HBRBACKGROUND, (LONG)CreateSolidBrush(c3));
 
     // set fonts
     HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
