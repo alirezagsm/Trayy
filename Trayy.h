@@ -1,8 +1,8 @@
 
 // Trayy v1.0
-// Copyright(C) 2024 alirezagsm
+// Copyright(C) 2024 A. Ghasemi
 
-// Based on RBTray v4.14 with the following acknowledgements:
+// Based on RBTray with the following attribution:
 // Copyright (C) 1998-2010  Nikolay Redko, J.D. Purcell
 // Copyright (C) 2015 Benbuck Nason
 
