@@ -1,4 +1,5 @@
 {
+    // vscode tasks file for Trayy, by A. Ghasemi
     // See https://go.microsoft.com/fwlink/?LinkId=733558
     // for the documentation about the tasks.json format
     "version": "2.0.0",
@@ -6,10 +7,23 @@
         {
             "label": "Build Project Release",
             "type": "shell",
-            "command": "echo",
+            "command": "powershell.exe",
             "args": [
-                "Done!"
+                "Copy-Item -Path Trayy.exe -Destination bin\\ -Force;",
+                "Copy-Item -Path hook.dll -Destination bin\\ -Force;",
+                "Compress-Archive -Path bin\\Trayy.exe,bin\\hook.dll -DestinationPath bin\\Trayy.zip -Force;",
+                "Write-Host 'Done!'"
             ],
+            "options": {
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                    ]
+                }
+            },
             "dependsOn": [
                 "Build exe"
             ],
@@ -32,17 +46,20 @@
         {
             "label": "Clean",
             "type": "shell",
-            "command": "cmd",
+            "command": "",
             "args": [
-                "/C",
-                "del",
-                "/F",
-                "/Q",
-                "Trayy.exe",
-                "hook.dll",
-                "hook.obj",
-                "Trayy.res",
+                "Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res -Force -ErrorAction SilentlyContinue"
             ],
+            "options": {
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                    ]
+                }
+            },
             "problemMatcher": []
         },
         {
