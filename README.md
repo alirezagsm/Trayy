@@ -16,8 +16,8 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 - **Send to Tray**: Send your favorite apps to the system tray for a clutter-free workspace!
 - **Hide and Seek Champion**: Enjoy the power to completely hide applications from the taskbar, keeping your desktop neat and tidy.
 - **App Support**: Ideal for Progressive Web Apps (PWAs) and (most) apps that didn't get the memo about system tray support. 
-- **Compatible with Windows**: Works with both Windows 10 and 11... prob works with earlier versions too, but we're not going to talk about that.
-- **Light as a Feather**: Portable and lightweight, perfect for those who value efficiency.
+- **Compatible with Windows**: Tested on Windows 10 and 11 with support for toast notifications.
+- **Light as a Feather**: Fully portable and extremely lightweight.
 
 ## 🚀 Getting Started
 
@@ -31,10 +31,11 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 6. Click on a tray icon to bring its application into the spotlight. If it's already in focus, it'll sneak back into the tray. This way, you can quickly peek at your apps without breaking your workflow!
 
 <p align="center">
-  <img src="demo.png" alt="Trayy demo" width="500"/>
+  <img src="demo.png" alt="GUI demo" height="375" width="auto"/>
+  <img src="demo.gif" alt="Video demo" width="auto" height="375"/>
 </p>
 
-**Pro Move**: Let Trayy join your startup squad! Just type `shell:startup` in the File Explorer's address bar to find the startup folder. Add Trayy's shortcut to your startup folder, along with all your other favorite apps you want to keep tucked away in the system tray. For WebApps, you can ask your browser to add their shortcuts to your Desktop. Then, simply move those shortcuts into the startup folder. Trayy will chill for a bit, letting the startup process finish, then swoop in to tidy everything up! It's a game changer for chat and calendar apps!
+**Pro Move**: Let Trayy join your startup squad! Add Trayy's shortcut to your `shell:startup` folder, along with all your other favorite apps you want to keep tucked away in the system tray. For WebApps, you can ask your browser to add their shortcuts to your Desktop. Then, simply move those shortcuts into the startup folder. Trayy will chill for a bit, letting the startup process finish, then swoop in to tidy everything up! It's a game changer for chat and calendar apps!
 
 ## 🙏 Acknowledgements
 
