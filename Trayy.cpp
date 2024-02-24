@@ -34,8 +34,10 @@
 
 static UINT WM_TASKBAR_CREATED;
 
+HWINEVENTHOOK hEventHook;
 static HINSTANCE hInstance;
 static HMODULE hLib;
+static HWND hwndBase;
 static HWND hwndMain;
 static HWND hwndItems[MAXTRAYITEMS];
 static HWND hwndForMenu;
@@ -219,15 +221,21 @@ void ExecuteMenu() {
         MessageBox(NULL, L"Error creating menu.", L"Trayy", MB_OK | MB_ICONERROR);
         return;
     }
-    AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"Restore");
-    AppendMenu(hMenu, MF_STRING, IDM_CLOSE, L"Close");
-    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL); //--------------
-    AppendMenu(hMenu, MF_STRING, IDM_EXIT, L"Exit Trayy");
-    AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"Visit GitHub");
-
+    wchar_t buffer[256];
+    GetWindowText(hwndForMenu, buffer, 256);
+    if (wcscmp(buffer, NAME) == 0) {
+        AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"App List");
+        AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL); //--------------
+        AppendMenu(hMenu, MF_STRING, IDM_EXIT, L"Exit Trayy");
+    }
+    else {
+        AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"Restore");
+        AppendMenu(hMenu, MF_STRING, IDM_CLOSE, L"Close");
+    }
     GetCursorPos(&point);
-    SetForegroundWindow(hwndMain);
 
+    SetForegroundWindow(hwndBase);
     TrackPopupMenu(hMenu, TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RIGHTALIGN | TPM_BOTTOMALIGN, point.x, point.y, 0, hwndMain, NULL);
 
     PostMessage(hwndMain, WM_USER, 0, 0);
@@ -255,11 +263,23 @@ void setLVItems(HWND hwndList) {
     }
 }
 
-bool appCheck(HWND lParam) {
+bool appCheck(HWND lParam, bool isEVENT_SYSTEM_FOREGROUND = false) {
     wchar_t windowName[256];
     GetWindowText(lParam, windowName, 256);
+    if (wcslen(windowName) == 0) {
+        return false;
+    }
 
-    if (!IsWindowVisible(lParam)) {
+    if (!IsWindowVisible(lParam) && !isEVENT_SYSTEM_FOREGROUND) {
+        return false;
+    }
+
+    if (isEVENT_SYSTEM_FOREGROUND) {
+        for (const auto& appName : appNames) {
+            if (wcslen(appName.c_str()) > 0 && wcsstr(windowName, appName.c_str()) != nullptr) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -387,9 +407,19 @@ bool IsTopWindow(HWND hwnd) {
     return false;
 }
 
+// Wait for windows startup on first launch
+void MinimizeAllInBackground() {
+    std::thread t([]() {
+        Sleep(3000);
+        MinimizeAll();
+        });
+    t.detach();
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_COMMAND:
+    {
         switch (LOWORD(wParam)) {
         case IDM_RESTORE:
             RestoreWindowFromTray(hwndForMenu);
@@ -414,7 +444,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         break;
+    }
     case WM_MIN:
+    {
         if (appCheck((HWND)lParam)) {
             MinimizeWindowToTray((HWND)lParam);
         }
@@ -423,7 +455,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
         }
         break;
+    }
     case WM_X:
+    {
         if (HOOKBOTH && appCheck((HWND)lParam)) {
             MinimizeWindowToTray((HWND)lParam);
         }
@@ -432,6 +466,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
         }
         break;
+    }
     case WM_REMTRAY:
         RestoreWindowFromTray((HWND)lParam);
         break;
@@ -439,6 +474,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         RefreshWindowInTray((HWND)lParam);
         break;
     case WM_TRAYCMD:
+    {
         switch ((UINT)lParam) {
         case NIN_SELECT:
         {
@@ -465,6 +501,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         break;
+    }
     case WM_SYSCOMMAND:
     {
         if (wParam == SC_CLOSE) {
@@ -561,8 +598,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
         }
+        break;
     }
-    break;
     case WM_DESTROY:
     {
         NOTASKBAR = false;
@@ -574,6 +611,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         if (hLib) {
             UnRegisterHook();
+            UnhookWinEvent(hEventHook);
             FreeLibrary(hLib);
         }
         RefreshTray();
@@ -590,21 +628,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     }
-
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-// Wait for windows startup on first launch
-void MinimizeAllInBackground() {
-    std::thread t([]() {
-        Sleep(3000);
-        MinimizeAll();
-        });
-    t.detach();
+
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
+{
+    if (event == EVENT_SYSTEM_FOREGROUND)
+    {
+        if (appCheck(hwnd), true)
+        {
+            RestoreWindowFromTray(hwnd);
+        }
+    }
 }
 
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/) {
-
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/)
+{
     std::wifstream file(L"settings.ini");
     std::wstring line;
     std::getline(file, line);
@@ -636,6 +676,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         MessageBox(NULL, L"Error setting hook procedure.", NAME, MB_OK | MB_ICONERROR);
         return 0;
     }
+
+    hEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+    if (!hEventHook) {
+        MessageBox(NULL, L"Error setting event hook procedure.", NAME, MB_OK | MB_ICONERROR);
+        return 0;
+    }
+
+    // create hwndBase to be the main window that is hidden and used to receive messages
+    hwndBase = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, hInstance, NULL);
 
     // window parameters
     int width = 300;
@@ -680,7 +729,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     }
 
     // create main window
-    hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, x, y, width, height, NULL, NULL, hInstance, NULL);
+    hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, x, y, width, height, hwndBase, NULL, hInstance, NULL);
     if (!hwndMain) {
         MessageBox(NULL, L"Error creating window.", NAME, MB_OK | MB_ICONERROR);
         return 0;
