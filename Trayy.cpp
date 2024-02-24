@@ -158,6 +158,13 @@ static bool RemoveWindowFromTray(HWND hwnd) {
 
 static void RestoreWindowFromTray(HWND hwnd) {
     HWND hwndOwner = GetWindow(hwnd, GW_OWNER);
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
+    if (wcsstr(windowName, NAME) != nullptr) {
+        ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+        return;
+    }
     if (NOTASKBAR) {
         if (hwndOwner != hwndBase) {
             SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
