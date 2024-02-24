@@ -373,7 +373,7 @@ void ButtonCallback(HWND hwnd)
             uniqueAppNames.insert(buffer);
         }
     }
-    std::wofstream file(L"settings.ini");
+    std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
     file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
     file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
     for (const auto& appName : uniqueAppNames) {
@@ -643,18 +643,36 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/)
 {
-    std::wifstream file(L"settings.ini");
-    std::wstring line;
-    std::getline(file, line);
-    HOOKBOTH = line.find(L"true") != std::string::npos;
-    std::getline(file, line);
-    NOTASKBAR = line.find(L"true") != std::string::npos;
+    std::wifstream file(SETTINGS_FILE);
+    if (!file) {
+        std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+        file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+        file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+    }
+    else {
+        try {
+            std::wstring line;
+            std::getline(file, line);
+            HOOKBOTH = line.find(L"true") != std::string::npos;
+            std::getline(file, line);
+            NOTASKBAR = line.find(L"true") != std::string::npos;
 
-    while (std::getline(file, line))
-    {
-        if (!line.empty())
+            while (std::getline(file, line))
+            {
+                if (!line.empty())
+                {
+                    appNames.push_back(line);
+                }
+            }
+            file.close();
+        }
+        catch (const std::exception&)
         {
-            appNames.push_back(line);
+            std::wstring backupFile = SETTINGS_FILE L".bak";
+            CopyFile(SETTINGS_FILE, backupFile.c_str(), FALSE);
+            std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+            file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+            file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
         }
     }
 
@@ -772,8 +790,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     SetClassLongPtr(hwndMain, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(CreateSolidBrush(c3)));
 
     // set fonts
-    HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
-    HFONT hFont_bold = CreateFont(16, 0, 0, 0, FW_DEMIBOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    HFONT hFont = CreateFont(21, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    HFONT hFont_bold = CreateFont(17, 0, 0, 0, FW_DEMIBOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
     SendMessage(hwndList, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hwndButton, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
     SendMessage(hwndCheckbox1, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
