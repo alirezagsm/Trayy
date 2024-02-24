@@ -46,7 +46,6 @@ static std::vector<std::wstring> appNames;
 
 static bool HOOKBOTH = true;
 static bool NOTASKBAR = false;
-static bool NOTSAKBAR_changed = false;
 
 int FindInTray(HWND hwnd) {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
@@ -158,19 +157,14 @@ static bool RemoveWindowFromTray(HWND hwnd) {
 }
 
 static void RestoreWindowFromTray(HWND hwnd) {
+    HWND hwndOwner = GetWindow(hwnd, GW_OWNER);
     if (NOTASKBAR) {
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        exStyle |= WS_EX_TOOLWINDOW; // Add WS_EX_TOOLWINDOW extended style
-        exStyle &= ~(WS_EX_APPWINDOW); // Add WS_EX_TOOLWINDOW extended style
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        NOTSAKBAR_changed = true;
+        if (hwndOwner != hwndBase) {
+            SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
+        }
     }
-    else if (NOTSAKBAR_changed) {
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        exStyle &= ~(WS_EX_TOOLWINDOW); // Remove WS_EX_TOOLWINDOW extended style
-        exStyle |= WS_EX_APPWINDOW; // Add WS_EX_TOOLWINDOW extended style
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        NOTSAKBAR_changed = false;
+    else if (hwndOwner == hwndBase) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
     }
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
@@ -330,33 +324,6 @@ void MinimizeAll() {
     }
 }
 
-void ButtonCallback(HWND hwnd)
-{
-    appNames.clear();
-    std::wofstream file(L"settings.ini");
-    std::set<std::wstring> uniqueAppNames;
-
-    for (int i = 0; i < ListView_GetItemCount(GetDlgItem(hwnd, ID_GUI)); i++)
-    {
-        wchar_t buffer[256];
-        ListView_GetItemText(GetDlgItem(hwnd, ID_GUI), i, 0, buffer, 256);
-        if (wcslen(buffer) > 0) {
-            uniqueAppNames.insert(buffer);
-        }
-    }
-    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
-    for (const auto& appName : uniqueAppNames) {
-        appNames.push_back(appName);
-        file << appName << std::endl;
-    }
-    file.close();
-    setLVItems(GetDlgItem(hwnd, ID_GUI));
-    // MinimizeWindowToTray(hwnd);
-    MinimizeAll();
-    MinimizeWindowToTray(hwndMain);
-
-}
 
 BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam) {
     char className[256];
@@ -386,6 +353,32 @@ void RefreshTray() {
         EnumChildWindows(taskbar, EnumChildProc, 0);
         });
     t.join();
+}
+
+void ButtonCallback(HWND hwnd)
+{
+    appNames.clear();
+    std::set<std::wstring> uniqueAppNames;
+
+    for (int i = 0; i < ListView_GetItemCount(GetDlgItem(hwnd, ID_GUI)); i++)
+    {
+        wchar_t buffer[256];
+        ListView_GetItemText(GetDlgItem(hwnd, ID_GUI), i, 0, buffer, 256);
+        if (wcslen(buffer) > 0) {
+            uniqueAppNames.insert(buffer);
+        }
+    }
+    std::wofstream file(L"settings.ini");
+    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+    for (const auto& appName : uniqueAppNames) {
+        appNames.push_back(appName);
+        file << appName << std::endl;
+    }
+    file.close();
+    setLVItems(GetDlgItem(hwnd, ID_GUI));
+    MinimizeAll();
+    RefreshTray();
 }
 
 bool IsTopWindow(HWND hwnd) {
@@ -684,7 +677,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     }
 
     // create hwndBase to be the main window that is hidden and used to receive messages
-    hwndBase = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, hInstance, NULL);
+    hwndBase = CreateWindowEx(0, WC_STATIC, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
 
     // window parameters
     int width = 300;
