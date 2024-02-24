@@ -165,10 +165,8 @@ static void RestoreWindowFromTray(HWND hwnd) {
         SetForegroundWindow(hwnd);
         return;
     }
-    if (NOTASKBAR) {
-        if (hwndOwner != hwndBase) {
-            SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
-        }
+    if (NOTASKBAR && hwndOwner != hwndBase) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
     }
     else if (hwndOwner == hwndBase) {
         SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
@@ -636,7 +634,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
 {
     if (event == EVENT_SYSTEM_FOREGROUND)
     {
-        if (appCheck(hwnd), true)
+        if ((GetWindow(hwnd, GW_OWNER) != hwndBase) && appCheck(hwnd, true))
         {
             RestoreWindowFromTray(hwnd);
         }
