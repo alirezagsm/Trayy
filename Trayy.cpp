@@ -262,34 +262,14 @@ void setLVItems(HWND hwndList) {
     }
 }
 
-bool appCheck(HWND lParam, bool isEVENT_SYSTEM_FOREGROUND = false) {
-    wchar_t windowName[256];
-    GetWindowText(lParam, windowName, 256);
-    if (wcslen(windowName) == 0) {
-        return false;
-    }
-
-    if (!IsWindowVisible(lParam) && !isEVENT_SYSTEM_FOREGROUND) {
-        return false;
-    }
-
-    if (isEVENT_SYSTEM_FOREGROUND) {
-        for (const auto& appName : appNames) {
-            if (wcslen(appName.c_str()) > 0 && wcsstr(windowName, appName.c_str()) != nullptr) {
-                return true;
-            }
-        }
-        return false;
-    }
-
+std::wstring getProcessName(HWND hwnd) {
     DWORD processId;
-    GetWindowThreadProcessId(lParam, &processId);
-
+    GetWindowThreadProcessId(hwnd, &processId);
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (hProcess == NULL)
-        return false;
+        return L"";
 
-    TCHAR processName[MAX_PATH] = L"";
+    wchar_t processName[MAX_PATH] = L"";
     HMODULE hMod;
     DWORD cbNeeded;
 
@@ -297,23 +277,58 @@ bool appCheck(HWND lParam, bool isEVENT_SYSTEM_FOREGROUND = false) {
     {
         GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
     }
-
     CloseHandle(hProcess);
-    std::vector<std::wstring> BrowserNames = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
+    return std::wstring(processName);
+}
+
+bool appCheck(HWND lParam, bool restore = false) {
+    wchar_t windowName[256];
+    GetWindowText(lParam, windowName, 256);
+
+    if (wcslen(windowName) == 0) {
+        return false;
+    }
+
+    if (restore) {
+        if (IsWindowVisible(lParam)) {
+            return false;
+        }
+    }
+
+    std::vector<std::wstring> ExcludedNames = { L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
+    for (const auto& exclusion : ExcludedNames) {
+        if (wcsstr(windowName, exclusion.c_str()) != nullptr) {
+            return false;
+        }
+    }
+
+    std::wstring processName = getProcessName(lParam);
+    if (processName.empty()) {
+        return false;
+    }
+
+    std::vector<const wchar_t*> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe" ,L"TextInputHost.exe", L"SystemSettings.exe", L"ApplicationFrameHost.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
+    for (const auto& exclusion : ExcludedProcesses) {
+        if (wcscmp(processName.c_str(), exclusion) == 0) {
+            return false;
+        }
+    }
+
     // change to window title if it's a browser
+    std::vector<std::wstring> BrowserNames = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
     for (const auto& browser : BrowserNames) {
-        if (wcscmp(processName, browser.c_str()) == 0) {
-            wcscpy(processName, windowName);
+        if (processName == browser) {
+            processName = windowName;
             break;
         }
     }
 
     for (const auto& appName : appNames) {
-        if (wcslen(appName.c_str()) > 0 && wcsstr(processName, appName.c_str()) != nullptr) {
+        if (!appName.empty() && processName.find(appName) != std::wstring::npos) {
             return true;
         }
     }
-    if (wcscmp(processName, NAME L".exe") == 0 && wcscmp(windowName, NAME) == 0) {
+    if (processName == NAME L".exe" && wcscmp(windowName, NAME) == 0) {
         return true;
     }
     return false;
@@ -629,12 +644,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-
 void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
 {
     if (event == EVENT_SYSTEM_FOREGROUND)
     {
-        if ((GetWindow(hwnd, GW_OWNER) != hwndBase) && appCheck(hwnd, true))
+        if (GetForegroundWindow() == hwnd) { // good for windows things
+            return;
+        }
+        if (appCheck(hwnd))
         {
             RestoreWindowFromTray(hwnd);
         }
