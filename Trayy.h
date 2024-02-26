@@ -25,6 +25,7 @@
 #define MAXTRAYITEMS 64
 
 #define NAME L"Trayy"
+#define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
 #define IDI_ICON1       101

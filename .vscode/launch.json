@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/Trayy.exe",
             "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
+            "console": "internalConsole",
             "preLaunchTask": "Build Project Debug"
         },
         {
@@ -20,7 +20,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/Trayy.exe",
             "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
+            "console": "internalConsole",
             "preLaunchTask": "Build Project Release"
         }
     ]

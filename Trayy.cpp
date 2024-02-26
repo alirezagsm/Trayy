@@ -34,8 +34,10 @@
 
 static UINT WM_TASKBAR_CREATED;
 
+HWINEVENTHOOK hEventHook;
 static HINSTANCE hInstance;
 static HMODULE hLib;
+static HWND hwndBase;
 static HWND hwndMain;
 static HWND hwndItems[MAXTRAYITEMS];
 static HWND hwndForMenu;
@@ -44,7 +46,6 @@ static std::vector<std::wstring> appNames;
 
 static bool HOOKBOTH = true;
 static bool NOTASKBAR = false;
-static bool NOTSAKBAR_changed = false;
 
 int FindInTray(HWND hwnd) {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
@@ -156,19 +157,19 @@ static bool RemoveWindowFromTray(HWND hwnd) {
 }
 
 static void RestoreWindowFromTray(HWND hwnd) {
-    if (NOTASKBAR) {
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        exStyle |= WS_EX_TOOLWINDOW; // Add WS_EX_TOOLWINDOW extended style
-        exStyle &= ~(WS_EX_APPWINDOW); // Add WS_EX_TOOLWINDOW extended style
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        NOTSAKBAR_changed = true;
+    HWND hwndOwner = GetWindow(hwnd, GW_OWNER);
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
+    if (wcsstr(windowName, NAME) != nullptr) {
+        ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+        return;
     }
-    else if (NOTSAKBAR_changed) {
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        exStyle &= ~(WS_EX_TOOLWINDOW); // Remove WS_EX_TOOLWINDOW extended style
-        exStyle |= WS_EX_APPWINDOW; // Add WS_EX_TOOLWINDOW extended style
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-        NOTSAKBAR_changed = false;
+    if (NOTASKBAR && hwndOwner != hwndBase) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
+    }
+    else if (hwndOwner == hwndBase) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
     }
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
@@ -219,15 +220,21 @@ void ExecuteMenu() {
         MessageBox(NULL, L"Error creating menu.", L"Trayy", MB_OK | MB_ICONERROR);
         return;
     }
-    AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"Restore");
-    AppendMenu(hMenu, MF_STRING, IDM_CLOSE, L"Close");
-    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL); //--------------
-    AppendMenu(hMenu, MF_STRING, IDM_EXIT, L"Exit Trayy");
-    AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"Visit GitHub");
-
+    wchar_t buffer[256];
+    GetWindowText(hwndForMenu, buffer, 256);
+    if (wcscmp(buffer, NAME) == 0) {
+        AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"App List");
+        AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL); //--------------
+        AppendMenu(hMenu, MF_STRING, IDM_EXIT, L"Exit Trayy");
+    }
+    else {
+        AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"Restore");
+        AppendMenu(hMenu, MF_STRING, IDM_CLOSE, L"Close");
+    }
     GetCursorPos(&point);
-    SetForegroundWindow(hwndMain);
 
+    SetForegroundWindow(hwndBase);
     TrackPopupMenu(hMenu, TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RIGHTALIGN | TPM_BOTTOMALIGN, point.x, point.y, 0, hwndMain, NULL);
 
     PostMessage(hwndMain, WM_USER, 0, 0);
@@ -255,22 +262,14 @@ void setLVItems(HWND hwndList) {
     }
 }
 
-bool appCheck(HWND lParam) {
-    wchar_t windowName[256];
-    GetWindowText(lParam, windowName, 256);
-
-    if (!IsWindowVisible(lParam)) {
-        return false;
-    }
-
+std::wstring getProcessName(HWND hwnd) {
     DWORD processId;
-    GetWindowThreadProcessId(lParam, &processId);
-
+    GetWindowThreadProcessId(hwnd, &processId);
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (hProcess == NULL)
-        return false;
+        return L"";
 
-    TCHAR processName[MAX_PATH] = L"";
+    wchar_t processName[MAX_PATH] = L"";
     HMODULE hMod;
     DWORD cbNeeded;
 
@@ -278,23 +277,58 @@ bool appCheck(HWND lParam) {
     {
         GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
     }
-
     CloseHandle(hProcess);
-    std::vector<std::wstring> BrowserNames = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
+    return std::wstring(processName);
+}
+
+bool appCheck(HWND lParam, bool restore = false) {
+    wchar_t windowName[256];
+    GetWindowText(lParam, windowName, 256);
+
+    if (wcslen(windowName) == 0) {
+        return false;
+    }
+
+    if (restore) {
+        if (IsWindowVisible(lParam)) {
+            return false;
+        }
+    }
+
+    std::vector<std::wstring> ExcludedNames = { L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
+    for (const auto& exclusion : ExcludedNames) {
+        if (wcsstr(windowName, exclusion.c_str()) != nullptr) {
+            return false;
+        }
+    }
+
+    std::wstring processName = getProcessName(lParam);
+    if (processName.empty()) {
+        return false;
+    }
+
+    std::vector<const wchar_t*> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe" ,L"TextInputHost.exe", L"SystemSettings.exe", L"ApplicationFrameHost.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
+    for (const auto& exclusion : ExcludedProcesses) {
+        if (wcscmp(processName.c_str(), exclusion) == 0) {
+            return false;
+        }
+    }
+
     // change to window title if it's a browser
+    std::vector<std::wstring> BrowserNames = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
     for (const auto& browser : BrowserNames) {
-        if (wcscmp(processName, browser.c_str()) == 0) {
-            wcscpy(processName, windowName);
+        if (processName == browser) {
+            processName = windowName;
             break;
         }
     }
 
     for (const auto& appName : appNames) {
-        if (wcslen(appName.c_str()) > 0 && wcsstr(processName, appName.c_str()) != nullptr) {
+        if (!appName.empty() && processName.find(appName) != std::wstring::npos) {
             return true;
         }
     }
-    if (wcscmp(processName, NAME L".exe") == 0 && wcscmp(windowName, NAME) == 0) {
+    if (processName == NAME L".exe" && wcscmp(windowName, NAME) == 0) {
         return true;
     }
     return false;
@@ -310,33 +344,6 @@ void MinimizeAll() {
     }
 }
 
-void ButtonCallback(HWND hwnd)
-{
-    appNames.clear();
-    std::wofstream file(L"settings.ini");
-    std::set<std::wstring> uniqueAppNames;
-
-    for (int i = 0; i < ListView_GetItemCount(GetDlgItem(hwnd, ID_GUI)); i++)
-    {
-        wchar_t buffer[256];
-        ListView_GetItemText(GetDlgItem(hwnd, ID_GUI), i, 0, buffer, 256);
-        if (wcslen(buffer) > 0) {
-            uniqueAppNames.insert(buffer);
-        }
-    }
-    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
-    for (const auto& appName : uniqueAppNames) {
-        appNames.push_back(appName);
-        file << appName << std::endl;
-    }
-    file.close();
-    setLVItems(GetDlgItem(hwnd, ID_GUI));
-    // MinimizeWindowToTray(hwnd);
-    MinimizeAll();
-    MinimizeWindowToTray(hwndMain);
-
-}
 
 BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam) {
     char className[256];
@@ -368,6 +375,32 @@ void RefreshTray() {
     t.join();
 }
 
+void ButtonCallback(HWND hwnd)
+{
+    appNames.clear();
+    std::set<std::wstring> uniqueAppNames;
+
+    for (int i = 0; i < ListView_GetItemCount(GetDlgItem(hwnd, ID_GUI)); i++)
+    {
+        wchar_t buffer[256];
+        ListView_GetItemText(GetDlgItem(hwnd, ID_GUI), i, 0, buffer, 256);
+        if (wcslen(buffer) > 0) {
+            uniqueAppNames.insert(buffer);
+        }
+    }
+    std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+    for (const auto& appName : uniqueAppNames) {
+        appNames.push_back(appName);
+        file << appName << std::endl;
+    }
+    file.close();
+    setLVItems(GetDlgItem(hwnd, ID_GUI));
+    MinimizeAll();
+    RefreshTray();
+}
+
 bool IsTopWindow(HWND hwnd) {
     HWND hwndTopmost = NULL;
     HWND hwnd_ = GetTopWindow(0);
@@ -387,9 +420,19 @@ bool IsTopWindow(HWND hwnd) {
     return false;
 }
 
+// Wait for windows startup on first launch
+void MinimizeAllInBackground() {
+    std::thread t([]() {
+        Sleep(3000);
+        MinimizeAll();
+        });
+    t.detach();
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_COMMAND:
+    {
         switch (LOWORD(wParam)) {
         case IDM_RESTORE:
             RestoreWindowFromTray(hwndForMenu);
@@ -414,7 +457,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         break;
+    }
     case WM_MIN:
+    {
         if (appCheck((HWND)lParam)) {
             MinimizeWindowToTray((HWND)lParam);
         }
@@ -423,7 +468,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
         }
         break;
+    }
     case WM_X:
+    {
         if (HOOKBOTH && appCheck((HWND)lParam)) {
             MinimizeWindowToTray((HWND)lParam);
         }
@@ -432,6 +479,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
         }
         break;
+    }
     case WM_REMTRAY:
         RestoreWindowFromTray((HWND)lParam);
         break;
@@ -439,6 +487,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         RefreshWindowInTray((HWND)lParam);
         break;
     case WM_TRAYCMD:
+    {
         switch ((UINT)lParam) {
         case NIN_SELECT:
         {
@@ -465,6 +514,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         }
         break;
+    }
     case WM_SYSCOMMAND:
     {
         if (wParam == SC_CLOSE) {
@@ -561,8 +611,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
         }
+        break;
     }
-    break;
     case WM_DESTROY:
     {
         NOTASKBAR = false;
@@ -574,6 +624,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         if (hLib) {
             UnRegisterHook();
+            UnhookWinEvent(hEventHook);
             FreeLibrary(hLib);
         }
         RefreshTray();
@@ -590,33 +641,55 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     }
-
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-// Wait for windows startup on first launch
-void MinimizeAllInBackground() {
-    std::thread t([]() {
-        Sleep(3000);
-        MinimizeAll();
-        });
-    t.detach();
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
+{
+    if (event == EVENT_SYSTEM_FOREGROUND)
+    {
+        if (GetForegroundWindow() == hwnd) { // good for windows things
+            return;
+        }
+        if (appCheck(hwnd))
+        {
+            RestoreWindowFromTray(hwnd);
+        }
+    }
 }
 
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/) {
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/)
+{
+    std::wifstream file(SETTINGS_FILE);
+    if (!file) {
+        std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+        file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+        file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+    }
+    else {
+        try {
+            std::wstring line;
+            std::getline(file, line);
+            HOOKBOTH = line.find(L"true") != std::string::npos;
+            std::getline(file, line);
+            NOTASKBAR = line.find(L"true") != std::string::npos;
 
-    std::wifstream file(L"settings.ini");
-    std::wstring line;
-    std::getline(file, line);
-    HOOKBOTH = line.find(L"true") != std::string::npos;
-    std::getline(file, line);
-    NOTASKBAR = line.find(L"true") != std::string::npos;
-
-    while (std::getline(file, line))
-    {
-        if (!line.empty())
+            while (std::getline(file, line))
+            {
+                if (!line.empty())
+                {
+                    appNames.push_back(line);
+                }
+            }
+            file.close();
+        }
+        catch (const std::exception&)
         {
-            appNames.push_back(line);
+            std::wstring backupFile = SETTINGS_FILE L".bak";
+            CopyFile(SETTINGS_FILE, backupFile.c_str(), FALSE);
+            std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+            file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+            file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
         }
     }
 
@@ -636,6 +709,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
         MessageBox(NULL, L"Error setting hook procedure.", NAME, MB_OK | MB_ICONERROR);
         return 0;
     }
+
+    hEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+    if (!hEventHook) {
+        MessageBox(NULL, L"Error setting event hook procedure.", NAME, MB_OK | MB_ICONERROR);
+        return 0;
+    }
+
+    // create hwndBase to be the main window that is hidden and used to receive messages
+    hwndBase = CreateWindowEx(0, WC_STATIC, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
 
     // window parameters
     int width = 300;
@@ -680,7 +762,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     }
 
     // create main window
-    hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, x, y, width, height, NULL, NULL, hInstance, NULL);
+    hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, x, y, width, height, hwndBase, NULL, hInstance, NULL);
     if (!hwndMain) {
         MessageBox(NULL, L"Error creating window.", NAME, MB_OK | MB_ICONERROR);
         return 0;
@@ -725,8 +807,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*
     SetClassLongPtr(hwndMain, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(CreateSolidBrush(c3)));
 
     // set fonts
-    HFONT hFont = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
-    HFONT hFont_bold = CreateFont(16, 0, 0, 0, FW_DEMIBOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    HFONT hFont = CreateFont(21, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
+    HFONT hFont_bold = CreateFont(17, 0, 0, 0, FW_DEMIBOLD, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"Sergoe UI");
     SendMessage(hwndList, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hwndButton, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
     SendMessage(hwndCheckbox1, WM_SETFONT, (WPARAM)hFont_bold, TRUE);
