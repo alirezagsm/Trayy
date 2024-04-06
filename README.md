@@ -32,7 +32,7 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 
 <p align="center">
   <img src="demo.png" alt="GUI demo" height="375" width="auto"/>
-  <img src="demo.gif" alt="Video demo" width="auto" height="375"/>
+  <img src="demo.gif" alt="Video demo" width="auto" height="375" autoplay/>
 </p>
 
 **Pro Move**: Let Trayy join your startup squad! Add Trayy's shortcut to your `shell:startup` folder, along with all your other favorite apps you want to keep tucked away in the system tray. For WebApps, you can ask your browser to add their shortcuts to your Desktop. Then, simply move those shortcuts into the startup folder. Trayy will chill for a bit, letting the startup process finish, then swoop in to tidy everything up! It's a game changer for chat and calendar apps!
