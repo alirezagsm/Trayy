@@ -1,169 +1,138 @@
 {
-    // vscode tasks file for Trayy, by A. Ghasemi
-    // See https://go.microsoft.com/fwlink/?LinkId=733558
-    // for the documentation about the tasks.json format
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build Project Release",
-            "type": "shell",
-            "command": "powershell.exe",
-            "args": [
-                "if (!(Test-Path -Path bin)) { New-Item -ItemType Directory -Path bin; }",
-                "Copy-Item -Path Trayy.exe -Destination bin\\ -Force;",
-                "Copy-Item -Path hook.dll -Destination bin\\ -Force;",
-                "Compress-Archive -Path bin\\Trayy.exe,bin\\hook.dll -DestinationPath bin\\Trayy.zip -Force;",
-                "Write-Host 'Done!'"
-            ],
-            "options": {
-                "shell": {
-                    "executable": "powershell.exe",
-                    "args": [
-                        "-NoProfile",
-                        "-ExecutionPolicy",
-                        "Bypass",
-                    ]
-                }
-            },
-            "dependsOn": [
-                "Build exe"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "Build Project Debug",
-            "type": "shell",
-            "command": "echo",
-            "args": [
-                "Done!"
-            ],
-            "dependsOn": [
-                "Build exe Debug"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "Clean",
-            "type": "shell",
-            "command": "",
-            "args": [
-                "Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res -Force -ErrorAction SilentlyContinue"
-            ],
-            "options": {
-                "shell": {
-                    "executable": "powershell.exe",
-                    "args": [
-                        "-NoProfile",
-                        "-ExecutionPolicy",
-                        "Bypass",
-                    ]
-                }
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Build exe Debug",
-            "type": "cppbuild",
-            "command": "cl",
-            "args": [
-                "Trayy.cpp",
-                "Trayy.res",
-                "/EHsc",
-                "/Zi",
-                "/nologo",
-                "/Fe:Trayy.exe",
-                "/link",
-                "hook.lib",
-                "User32.lib",
-                "Shlwapi.lib",
-                "Advapi32.lib",
-                "Shell32.lib",
-            ],
-            "dependsOn": [
-                "Build hook",
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "Build exe",
-            "type": "cppbuild",
-            "command": "cl",
-            "args": [
-                "Trayy.cpp",
-                "Trayy.res",
-                "/EHsc",
-                "/nologo",
-                "/O2",
-                "/Fe:Trayy.exe",
-                "/link",
-                "hook.lib",
-                "User32.lib",
-                "Shlwapi.lib",
-                "Advapi32.lib",
-                "Shell32.lib",
-            ],
-            "dependsOn": [
-                "Build hook",
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "Build hook",
-            "type": "cppbuild",
-            "command": "link",
-            "args": [
-                "/DLL",
-                "/nologo",
-                "/out:hook.dll",
-                "hook.obj",
-                "User32.lib",
-            ],
-            "dependsOn": [
-                "Build hook obj"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": [
-                "$msCompile"
-            ]
-        },
-        {
-            "label": "Build hook obj",
-            "type": "cppbuild",
-            "command": "cl",
-            "args": [
-                "/c",
-                "/nologo",
-                "/EHsc",
-                "hook.cpp"
-            ],
-            "dependsOn": [
-                "Build res"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": [
-                "$msCompile"
-            ]
-        },
-        {
-            "label": "Build res",
-            "type": "shell",
-            "command": "rc",
-            "args": [
-                "/fo",
-                "Trayy.res",
-                "Trayy.rc"
-            ],
-            "dependsOn": [
-                "Clean"
-            ],
-            "dependsOrder": "sequence",
-            "problemMatcher": [
-                "$msCompile"
-            ]
-        }
-    ]
+	// vscode tasks file for Trayy, by A. Ghasemi
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Project Release",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"if (!(Test-Path -Path bin)) { New-Item -ItemType Directory -Path bin; }",
+				"Copy-Item -Path Trayy.exe -Destination bin\\ -Force;",
+				"Copy-Item -Path hook.dll -Destination bin\\ -Force;",
+				"Compress-Archive -Path bin\\Trayy.exe,bin\\hook.dll -DestinationPath bin\\Trayy.zip -Force;",
+				"Write-Host 'Done!'"
+			],
+			"options": {
+				"shell": {
+					"executable": "powershell.exe",
+					"args": ["-NoProfile", "-ExecutionPolicy", "Bypass"]
+				}
+			},
+			"dependsOn": ["Build exe"],
+			"dependsOrder": "sequence",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Build Project Debug",
+			"type": "shell",
+			"command": "echo",
+			"args": ["Done!"],
+			"dependsOn": ["Build exe Debug"],
+			"dependsOrder": "sequence",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Clean",
+			"type": "shell",
+			"command": "",
+			"args": [
+				"Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res, Trayy_UI.obj -Force -ErrorAction SilentlyContinue"
+			],
+			"options": {
+				"shell": {
+					"executable": "powershell.exe",
+					"args": ["-NoProfile", "-ExecutionPolicy", "Bypass"]
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Build exe Debug",
+			"type": "cppbuild",
+			"command": "cl",
+			"args": [
+				"Trayy.cpp",
+				"Trayy_UI.cpp",
+				"Trayy.res",
+				"/EHsc",
+				"/Zi",
+				"/nologo",
+				"/std:c++17",
+				"/Fe:Trayy.exe",
+				"/link",
+				"hook.lib",
+				"User32.lib",
+				"Shlwapi.lib",
+				"Advapi32.lib",
+				"Shell32.lib",
+				"Comctl32.lib"
+			],
+			"dependsOn": ["Build hook"],
+			"dependsOrder": "sequence",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Build exe",
+			"type": "cppbuild",
+			"command": "cl",
+			"args": [
+				"Trayy.cpp",
+				"Trayy_UI.cpp",
+				"Trayy.res",
+				"/EHsc",
+				"/nologo",
+				"/O2",
+				"/Fe:Trayy.exe",
+				"/link",
+				"hook.lib",
+				"User32.lib",
+				"Shlwapi.lib",
+				"Advapi32.lib",
+				"Shell32.lib",
+				"Comctl32.lib"
+			],
+			"dependsOn": ["Build hook"],
+			"dependsOrder": "sequence",
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "Build hook",
+			"type": "cppbuild",
+			"command": "link",
+			"args": [
+				"/DLL",
+				"/nologo",
+				"/out:hook.dll",
+				"hook.obj",
+				"User32.lib",
+				"/link",
+				"Shcore.lib",
+				"Psapi.lib"
+			],
+			"dependsOn": ["Build hook obj"],
+			"dependsOrder": "sequence",
+			"problemMatcher": ["$msCompile"]
+		},
+		{
+			"label": "Build hook obj",
+			"type": "cppbuild",
+			"command": "cl",
+			"args": ["/c", "/nologo", "/EHsc", "hook.cpp"],
+			"dependsOn": ["Build res"],
+			"dependsOrder": "sequence",
+			"problemMatcher": ["$msCompile"]
+		},
+		{
+			"label": "Build res",
+			"type": "shell",
+			"command": "rc",
+			"args": ["/fo", "Trayy.res", "Trayy.rc"],
+			"dependsOn": ["Clean"],
+			"dependsOrder": "sequence",
+			"problemMatcher": ["$msCompile"]
+		}
+	]
 }
