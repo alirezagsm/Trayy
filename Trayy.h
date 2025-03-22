@@ -1,26 +1,9 @@
-
-// Trayy v1.0
-// Copyright(C) 2024 A. Ghasemi
-
-// Based on RBTray with the following attribution:
-// Copyright (C) 1998-2010  Nikolay Redko, J.D. Purcell
-// Copyright (C) 2015 Benbuck Nason
-
-// This program is free software : you can redistribute it and /or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with this program.If not, see < https://www.gnu.org/licenses/>.
-
+#pragma once
+#define LEAN_AND_MEAN
 #define UNICODE
 #include <windows.h>
+#include <string>
+#include <vector>
 
 #define MAXTRAYITEMS 64
 
@@ -48,5 +31,41 @@
 
 #define DLLIMPORT __declspec(dllexport)
 
+// Global access
+extern HWND hwndMain;
+extern HWND hwndBase;
+extern HWND hwndItems[MAXTRAYITEMS];
+extern HWND hwndForMenu;
+extern std::vector<std::wstring> appNames;
+extern bool HOOKBOTH;
+extern bool NOTASKBAR;
+
+// Global variables
+extern UINT WM_TASKBAR_CREATED;
+extern HWINEVENTHOOK hEventHook;
+extern HINSTANCE hInstance;
+extern HMODULE hLib;
+
+// Hook-related functions
 BOOL DLLIMPORT RegisterHook(HMODULE);
 void DLLIMPORT UnRegisterHook();
+
+// Core functions
+void MinimizeWindowToTray(HWND hwnd);
+void RestoreWindowFromTray(HWND hwnd);
+void CloseWindowFromTray(HWND hwnd);
+void RefreshWindowInTray(HWND hwnd);
+bool RemoveWindowFromTray(HWND hwnd);
+int FindInTray(HWND hwnd);
+bool AddToTray(int i);
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+std::wstring getProcessName(HWND hwnd);
+bool appCheck(HWND lParam, bool restore = false);
+bool IsTopWindow(HWND hwnd);
+HICON GetWindowIcon(HWND hwnd);
+void MinimizeAll();
+void MinimizeAllInBackground();
+void RefreshTray();
+void LoadSettings();
+void SaveSettings();
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
