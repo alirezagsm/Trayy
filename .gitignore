@@ -6,8 +6,10 @@
 !README.md
 !logo.ico
 !Trayy.cpp
+!Trayy_UI.cpp
 !hook.cpp
 !Trayy.h
+!Trayy_UI.h
 !demo.png
 !demo.gif
 !Trayy.rc

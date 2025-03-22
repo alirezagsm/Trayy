@@ -1,6 +1,3 @@
-
-
-
 <h1 align="center">
     <img src="logo.ico" alt="Trayy logo" width="80"/>
     <div>
@@ -13,19 +10,19 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 
 ## 🎯 Features
 
-- **Send to Tray**: Send your favorite apps to the system tray for a clutter-free workspace!
-- **Hide and Seek Champion**: Enjoy the power to completely hide applications from the taskbar, keeping your desktop neat and tidy.
-- **App Support**: Ideal for Progressive Web Apps (PWAs) and (most) apps that didn't get the memo about system tray support. 
-- **Compatible with Windows**: Tested on Windows 10 and 11 with support for toast notifications.
-- **Light as a Feather**: Fully portable and extremely lightweight.
+-   **Send to Tray**: Send your favorite apps to the system tray for a clutter-free workspace!
+-   **Hide and Seek Champion**: Enjoy the power to completely hide applications from the taskbar, keeping your desktop neat and tidy.
+-   **App Support**: Ideal for Progressive Web Apps (PWAs) and (most) apps that didn't get the memo about system tray support such as Thunderbird.
+-   **Compatible with Windows**: Tested on Windows 10 and 11 with support for toast notifications.
+-   **Light as a Feather**: Fully portable and extremely lightweight.
 
 ## 🚀 Getting Started
 
 1. Kick things off by downloading `Trayy.zip` and unzipping it to reveal the magic inside!
-2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise a false positive but fear not! Trayy is harmless and also open source ([VirusTotal report](https://www.virustotal.com/gui/file/688011ba8305871139bac0b7da0da7f2e56370e65f9909bea2350723b9db2822/detection)). Run the app to get the party started. 
+2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise a false positive but fear not! Trayy is harmless and also open source ([VirusTotal report](https://www.virustotal.com/gui/file/688011ba8305871139bac0b7da0da7f2e56370e65f9909bea2350723b9db2822/detection)). Run the app to get the party started.
 3. Time to pick your superpowers:
-   - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray.
-   - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
+    - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray.
+    - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
 4. Now, list out your favorite applications (case-sensitive). Trayy will keep an eye out for any windows process names that match your list. For WebApps, Trayy will look for tab names that contain your specified string.
 5. Hit Save and BAM! Depending on your settings, your chosen applications will now be tucked away neatly in the system tray.
 6. Click on a tray icon to bring its application into the spotlight. If it's already in focus, it'll sneak back into the tray. This way, you can quickly peek at your apps without breaking your workflow!
@@ -39,5 +36,4 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 
 ## 🙏 Acknowledgements
 
-This project is based on RBTray.</br>
-RBTray: https://github.com/benbuck/rbtray
+This project inspired by RBTray.

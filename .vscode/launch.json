@@ -1,27 +1,34 @@
 {
-    // vscode launch file for Trayy, by A. Ghasemi
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Debug",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Trayy.exe",
-            "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
-            "preLaunchTask": "Build Project Debug"
-        },
-        {
-            "name": "Release",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Trayy.exe",
-            "cwd": "${workspaceFolder}",
-            "console": "internalConsole",
-            "preLaunchTask": "Build Project Release"
-        }
-    ]
+	// vscode launch file for Trayy, by A. Ghasemi
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"program": "${workspaceFolder}/Trayy.exe",
+			"cwd": "${workspaceFolder}",
+			"console": "internalConsole",
+			"preLaunchTask": "Build Project Debug",
+			"internalConsoleOptions": "openOnSessionStart"
+		},
+		{
+			"name": "Release",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"program": "${workspaceFolder}/Trayy.exe",
+			"cwd": "${workspaceFolder}",
+			"console": "internalConsole",
+			"preLaunchTask": "Build Project Release"
+		},
+		{
+			"name": "Attach to hook",
+			"type": "cppvsdbg",
+			"request": "attach",
+			"processId": "${command:pickProcess}"
+		}
+	]
 }
