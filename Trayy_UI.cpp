@@ -1,6 +1,7 @@
 #include "Trayy_UI.h"
 #include "Trayy.h"
 #include <set>
+#include <unordered_set>
 #include <fstream>
 #include <CommCtrl.h>
 #include <shellapi.h>
@@ -44,11 +45,17 @@ void setLVItems(HWND hwndList) {
         lvi.pszText = (LPWSTR)L"";
         ListView_InsertItem(hwndList, &lvi);
     }
-    for (int i = 0; i < appNames.size(); i++)
+    int i = 0;
+    for (const auto& appName : appNames)
     {
         lvi.iItem = i;
-        lvi.pszText = (LPWSTR)appNames[i].c_str();
+        std::wstring displayName = appName;
+        if (specialAppNames.find(appName) != specialAppNames.end()) {
+            displayName += L"*";
+        }
+        lvi.pszText = (LPWSTR)displayName.c_str();
         ListView_InsertItem(hwndList, &lvi);
+        i++;
     }
 }
 
@@ -66,7 +73,7 @@ void HandleSaveButtonClick(HWND hwnd) {
     }
     
     for (const auto& appName : uniqueAppNames) {
-        appNames.push_back(appName);
+        appNames.insert(appName);
     }
     
     SaveSettings();
@@ -218,7 +225,7 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
     }
 
     // Create main window
-    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION, 
+    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
                                    x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
     
     if (!hwndMain) {
@@ -249,33 +256,33 @@ void SetupWindowControls(HWND hwndMain, HINSTANCE hInstance) {
     int height = WINDOW_HEIGHT - scrollBarHeight + SAFETY_MARGIN;
 
     // Add checkboxes
-    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed", 
-                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 
-                                       LEFT_PADDING, 0, width, BOX_HEIGHT, 
+    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed",
+                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                       LEFT_PADDING, 0, width, BOX_HEIGHT,
                                        hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
     
-    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar", 
-                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 
-                                       LEFT_PADDING, BOX_HEIGHT, width, BOX_HEIGHT, 
+    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar",
+                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                       LEFT_PADDING, BOX_HEIGHT, width, BOX_HEIGHT,
                                        hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
     
     SendMessage(hwndCheckbox1, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
 
     // Create list view
-    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"", 
-                                  WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER, 
-                                  0, 2 * BOX_HEIGHT, width, 
-                                  height - (BUTTON_HEIGHT + BOX_HEIGHT + BOX_HEIGHT + scrollBarHeight), 
+    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"",
+                                  WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER,
+                                  0, 2 * BOX_HEIGHT, width,
+                                  height - (BUTTON_HEIGHT + BOX_HEIGHT + BOX_HEIGHT + scrollBarHeight),
                                   hwndMain, (HMENU)ID_GUI, hInstance, NULL);
 
     SetupListView(hwndList, width);
 
     // Create save button
-    CreateWindowEx(0, L"BUTTON", L"Save", 
-                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 
-                 -SAFETY_MARGIN, height - (BUTTON_HEIGHT + scrollBarHeight) - SAFETY_MARGIN, 
-                 width + SAFETY_MARGIN, BUTTON_HEIGHT, 
+    CreateWindowEx(0, L"BUTTON", L"Save",
+                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                 -SAFETY_MARGIN, height - (BUTTON_HEIGHT + scrollBarHeight) - SAFETY_MARGIN,
+                 width + SAFETY_MARGIN, BUTTON_HEIGHT,
                  hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
 
     ApplyUIStyles(hwndMain, hwndList);
@@ -296,15 +303,15 @@ void ApplyUIStyles(HWND hwndMain, HWND hwndList) {
     ListView_SetTextColor(hwndList, COLOR_TEXT);
 
     g_hFontNormal = CreateFont(
-        FONT_SIZE_NORMAL, 0, 0, 0, 
-        FONT_WEIGHT_NORMAL, FALSE, FALSE, FALSE, 
-        ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, 
+        FONT_SIZE_NORMAL, 0, 0, 0,
+        FONT_WEIGHT_NORMAL, FALSE, FALSE, FALSE,
+        ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
         DEFAULT_QUALITY, DEFAULT_PITCH, FONT_NAME);
     
     g_hFontBold = CreateFont(
-        FONT_SIZE_BOLD, 0, 0, 0, 
-        FONT_WEIGHT_BOLD, FALSE, FALSE, FALSE, 
-        ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, 
+        FONT_SIZE_BOLD, 0, 0, 0,
+        FONT_WEIGHT_BOLD, FALSE, FALSE, FALSE,
+        ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
         DEFAULT_QUALITY, DEFAULT_PITCH, FONT_NAME);
     
     SendMessage(GetDlgItem(hwndMain, ID_GUI), WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);

@@ -6,6 +6,7 @@
 #include <shellapi.h>
 #include <thread>
 #include <set>
+#include <unordered_set>
 #include <stdio.h>
 #include <psapi.h>
 
@@ -20,9 +21,80 @@ HWND hwndBase;
 HWND hwndMain;
 HWND hwndItems[MAXTRAYITEMS];
 HWND hwndForMenu;
-std::vector<std::wstring> appNames;
+std::unordered_set<std::wstring> appNames;
+std::unordered_set<std::wstring> specialAppNames;
 bool HOOKBOTH = true;
 bool NOTASKBAR = false;
+
+// Shared memory variables
+HANDLE hSharedMemory = NULL;
+SpecialAppsSharedData* pSharedData = NULL;
+
+// Shared memory functions
+BOOL InitializeSharedMemory() {
+    // Create shared memory
+    hSharedMemory = CreateFileMapping(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_READWRITE,
+        0,
+        SHARED_MEM_SIZE,
+        SHARED_MEM_NAME);
+
+    if (hSharedMemory == NULL) {
+        return FALSE;
+    }
+
+    // Map view of file
+    pSharedData = (SpecialAppsSharedData*)MapViewOfFile(
+        hSharedMemory,
+        FILE_MAP_ALL_ACCESS,
+        0,
+        0,
+        SHARED_MEM_SIZE);
+
+    if (pSharedData == NULL) {
+        CloseHandle(hSharedMemory);
+        hSharedMemory = NULL;
+        return FALSE;
+    }
+
+    // Initialize
+    pSharedData->count = 0;
+    
+    return TRUE;
+}
+
+void CleanupSharedMemory() {
+    if (pSharedData) {
+        UnmapViewOfFile(pSharedData);
+        pSharedData = NULL;
+    }
+    
+    if (hSharedMemory) {
+        CloseHandle(hSharedMemory);
+        hSharedMemory = NULL;
+    }
+}
+
+BOOL UpdateSpecialAppsList(const std::unordered_set<std::wstring>& specialApps) {
+    if (!pSharedData)
+        return FALSE;
+        
+    // Clear existing data
+    ZeroMemory(pSharedData, SHARED_MEM_SIZE);
+    
+    // Update count and app names
+    int idx = 0;
+    for (const auto& app : specialApps) {
+        if (idx >= MAX_SPECIAL_APPS) break;
+        wcscpy_s(pSharedData->specialApps[idx], MAX_PATH, app.c_str());
+        idx++;
+    }
+    pSharedData->count = idx;
+    
+    return TRUE;
+}
 
 int FindInTray(HWND hwnd) {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
@@ -341,40 +413,44 @@ void SaveSettings() {
         file << appName << std::endl;
     }
     file.close();
+    LoadSettings();
     RefreshTray();
 }
 
 void LoadSettings() {
+    appNames.clear();
+    specialAppNames.clear();
     std::wifstream file(SETTINGS_FILE);
     if (!file) {
         std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
-        file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-        file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
-    }
-    else {
+        file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
+        file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
+    } else {
         try {
             std::wstring line;
             std::getline(file, line);
             HOOKBOTH = line.find(L"true") != std::string::npos;
             std::getline(file, line);
             NOTASKBAR = line.find(L"true") != std::string::npos;
-
-            while (std::getline(file, line))
-            {
-                if (!line.empty())
-                {
-                    appNames.push_back(line);
+            while (std::getline(file, line)) {
+                if (!line.empty()) {
+                    if (line.back() == L'*') {
+                        std::wstring baseName = line.substr(0, line.length() - 1);
+                        appNames.insert(baseName);
+                        specialAppNames.insert(baseName);
+                    } else {
+                        appNames.insert(line);
+                    }
                 }
             }
             file.close();
-        }
-        catch (const std::exception&)
-        {
+            UpdateSpecialAppsList(specialAppNames);
+        } catch (const std::exception&) {
             std::wstring backupFile = SETTINGS_FILE L".bak";
             CopyFile(SETTINGS_FILE, backupFile.c_str(), FALSE);
             std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
-            file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-            file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+            file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
+            file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
         }
     }
 }
@@ -489,7 +565,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             FreeLibrary(hLib);
         }
         RefreshTray();
-        CleanupResources();
+        CleanupSharedMemory();
         
         // Your existing PostQuitMessage call
         PostQuitMessage(0);
@@ -512,7 +588,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
 {
     hInstance = hInst;
     LoadSettings();
-    
+    InitializeSharedMemory();
+
     HWND existingApp = FindWindow(NAME, NAME);
     if (existingApp) {
         RefreshTray();

@@ -4,8 +4,10 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 #define MAXTRAYITEMS 64
+#define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
 #define SETTINGS_FILE L".settings.ini"
@@ -29,14 +31,27 @@
 #define IDM_LIST        0x1004
 #define IDM_ABOUT       0x1005
 
+#define SHARED_MEM_NAME L"TraySpecialApps"
+#define SHARED_MEM_SIZE (MAX_SPECIAL_APPS * MAX_PATH * sizeof(wchar_t))
+
 #define DLLIMPORT __declspec(dllexport)
+
+// Shared Memory
+typedef struct {
+    int count;
+    wchar_t specialApps[MAX_SPECIAL_APPS][MAX_PATH];
+} SpecialAppsSharedData;
+BOOL DLLIMPORT InitializeSharedMemory();
+void DLLIMPORT CleanupSharedMemory();
+BOOL DLLIMPORT UpdateSpecialAppsList(const std::vector<std::wstring>& specialApps);
 
 // Global access
 extern HWND hwndMain;
 extern HWND hwndBase;
 extern HWND hwndItems[MAXTRAYITEMS];
 extern HWND hwndForMenu;
-extern std::vector<std::wstring> appNames;
+extern std::unordered_set<std::wstring> appNames;
+extern std::unordered_set<std::wstring> specialAppNames;
 extern bool HOOKBOTH;
 extern bool NOTASKBAR;
 
@@ -45,6 +60,8 @@ extern UINT WM_TASKBAR_CREATED;
 extern HWINEVENTHOOK hEventHook;
 extern HINSTANCE hInstance;
 extern HMODULE hLib;
+extern HANDLE hSharedMemory;
+extern SpecialAppsSharedData* pSharedData;
 
 // Hook-related functions
 BOOL DLLIMPORT RegisterHook(HMODULE);
