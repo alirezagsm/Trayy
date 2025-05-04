@@ -26,6 +26,10 @@ std::unordered_set<std::wstring> specialAppNames;
 bool HOOKBOTH = true;
 bool NOTASKBAR = false;
 
+std::unordered_set<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
+std::unordered_set<std::wstring> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
+std::unordered_set<std::wstring> UseWindowName = { L"thunderbird.exe", L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
+
 // Shared memory variables
 HANDLE hSharedMemory = NULL;
 SpecialAppsSharedData* pSharedData = NULL;
@@ -284,11 +288,10 @@ bool appCheck(HWND lParam, bool restore) {
         }
     }
 
-    std::vector<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
-    for (const auto& exclusion : ExcludedNames) {
-        if (wcsstr(windowName, exclusion.c_str()) != nullptr) {
-            return false;
-        }
+    // Excluded window names
+    std::wstring windowNameStr(windowName);
+    if (ExcludedNames.find(windowNameStr) != ExcludedNames.end()) {
+        return false;
     }
 
     std::wstring processName = getProcessName(lParam);
@@ -296,21 +299,14 @@ bool appCheck(HWND lParam, bool restore) {
         return false;
     }
 
-    // Exclude some processes
-    std::vector<const wchar_t*> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe" ,L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
-    for (const auto& exclusion : ExcludedProcesses) {
-        if (wcscmp(processName.c_str(), exclusion) == 0) {
-            return false;
-        }
+    // Excluded processes
+    if (ExcludedProcesses.find(processName) != ExcludedProcesses.end()) {
+        return false;
     }
 
-    // change to window name if needed
-    std::vector<std::wstring> swithNames = { L"thunderbird.exe", L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
-    for (const auto& swithName : swithNames) {
-        if (processName == swithName) {
-            processName = windowName;
-            break;
-        }
+    // Change to window name if needed
+    if (UseWindowName.find(processName) != UseWindowName.end()) {
+        processName = windowName;
     }
 
     for (const auto& appName : appNames) {
@@ -587,8 +583,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*szCmdLine*/, _In_ int /*iCmdShow*/)
 {
     hInstance = hInst;
-    LoadSettings();
     InitializeSharedMemory();
+    LoadSettings();
 
     HWND existingApp = FindWindow(NAME, NAME);
     if (existingApp) {
