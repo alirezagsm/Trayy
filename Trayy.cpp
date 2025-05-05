@@ -132,11 +132,6 @@ bool AddToTray(int i) {
     nid.cbSize = NOTIFYICONDATA_V2_SIZE;
     nid.hWnd = hwndMain;
     nid.uID = (UINT)i;
-
-    wchar_t debugMsg[128];
-    swprintf(debugMsg, 128, L"AddToTray: hwndMain=0x%p, i=%d\n", hwndMain, i);
-    OutputDebugString(debugMsg);
-
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYCMD;
     nid.hIcon = GetWindowIcon(hwndItems[i]);
@@ -632,9 +627,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
     InitializeUI(hInstance);
     ShowAppInterface(true);
 
+    if (updateAvailable) {
+        SetTrayIconUpdate();
+    }
     MinimizeAllInBackground();
     RefreshTray();
-    SetTrayIconUpdate();
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {

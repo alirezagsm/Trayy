@@ -91,8 +91,7 @@ void SetTrayIconUpdate() {
 }
 
 
-bool NeedsUpdate(std::wstring latestVersion) {
-    return true;
+bool NeedsUpdate(const std::wstring& latestVersion) {
     auto parseVersion = [](const std::wstring& v) -> std::vector<int> {
         std::vector<int> parts;
         size_t start = (v[0] == L'v' || v[0] == L'V') ? 1 : 0;
@@ -105,36 +104,26 @@ bool NeedsUpdate(std::wstring latestVersion) {
         if (start < v.size())
             parts.push_back(std::stoi(v.substr(start)));
         return parts;
-        };
+    };
 
     std::vector<int> curVer = parseVersion(VERSION);
     std::vector<int> latVer = parseVersion(latestVersion);
 
     // Pad shorter version with zeros
-    while (curVer.size() < latVer.size()) curVer.push_back(0);
-    while (latVer.size() < curVer.size()) latVer.push_back(0);
+    size_t maxLen = (std::max)(curVer.size(), latVer.size());
+    curVer.resize(maxLen, 0);
+    latVer.resize(maxLen, 0);
 
-    bool isNewer = false;
-    for (size_t i = 0; i < curVer.size(); ++i) {
+    for (size_t i = 0; i < maxLen; ++i) {
         if (latVer[i] > curVer[i]) {
-            isNewer = true;
-            break;
+            return true; // Update needed
         }
-        else if (latVer[i] < curVer[i]) {
-            break;
-        }
-    }
-
-    // If all parts are equal, the version with more original parts (more dots) takes precedence
-    if (!isNewer && curVer.size() != latVer.size()) {
-        // Compare original (un-padded) lengths
-        size_t curParts = std::count(std::wstring(VERSION).begin(), std::wstring(VERSION).end(), L'.') + 1;
-        size_t latParts = std::count(latestVersion.begin(), latestVersion.end(), L'.') + 1;
-        if (latParts > curParts) {
-            isNewer = true;
+        if (latVer[i] < curVer[i]) {
+            return false; // Current is newer
         }
     }
-    return isNewer;
+    // Versions are equal
+    return false;
 }
 
 void CheckForUpdates() {

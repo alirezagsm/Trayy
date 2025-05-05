@@ -304,8 +304,8 @@ void SetupWindowControls(HWND hwndMain, HINSTANCE hInstance) {
             width + SAFETY_MARGIN, BUTTON_HEIGHT,
             hwndMain, (HMENU)ID_UPDATE_BUTTON, hInstance, NULL);
         updateButtonHeight = BUTTON_HEIGHT;
+        yOffset += BUTTON_HEIGHT;
     }
-    yOffset += BUTTON_HEIGHT;
 
     // Add checkboxes
     HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed",
