@@ -1,8 +1,8 @@
-#include "Trayy_UI.h"
 #include "Trayy.h"
 #include <set>
 #include <unordered_set>
 #include <fstream>
+#include <thread>
 #include <CommCtrl.h>
 #include <shellapi.h>
 
@@ -71,15 +71,21 @@ void HandleSaveButtonClick(HWND hwnd) {
             uniqueAppNames.insert(buffer);
         }
     }
-    
+
     for (const auto& appName : uniqueAppNames) {
         appNames.insert(appName);
     }
-    
+
     SaveSettings();
     setLVItems(GetDlgItem(hwnd, ID_GUI));
     MinimizeAll();
     RefreshTray();
+}
+
+void HandleUpdateButtonClick(HWND hwnd) {
+    std::thread([] {
+        CheckAndUpdate(VERSION);
+        }).detach();
 }
 
 void HandleListViewNotifications(HWND hwnd, LPARAM lParam) {
@@ -160,7 +166,7 @@ void HandleListViewNotifications(HWND hwnd, LPARAM lParam) {
 }
 
 void HandleMinimizeCommand(HWND hwnd) {
-     if (appCheck((HWND)hwnd)) {
+    if (appCheck((HWND)hwnd)) {
         MinimizeWindowToTray((HWND)hwnd);
     }
     else {
@@ -189,7 +195,7 @@ void HandleCheckboxClick(HWND hwnd, int checkboxId) {
 void UpdateUIFromSettings(HWND hwnd) {
     SendMessage(GetDlgItem(hwnd, ID_CHECKBOX1), BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(hwnd, ID_CHECKBOX2), BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
-    
+
     setLVItems(GetDlgItem(hwnd, ID_GUI));
 }
 
@@ -218,7 +224,7 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszMenuName = NULL;
     wc.lpszClassName = NAME;
-    
+
     if (!RegisterClass(&wc)) {
         MessageBox(NULL, L"Error creating window class", NAME, MB_OK | MB_ICONERROR);
         return NULL;
@@ -226,8 +232,8 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
 
     // Create main window
     HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
-                                   x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
-    
+        x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
+
     if (!hwndMain) {
         MessageBox(NULL, L"Error creating window.", NAME, MB_OK | MB_ICONERROR);
         return NULL;
@@ -248,48 +254,8 @@ void SetupListView(HWND hwndList, int width) {
     ListView_SetExtendedListViewStyle(hwndList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
 }
 
-void SetupWindowControls(HWND hwndMain, HINSTANCE hInstance) {
-    // Get real client size
-    int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
-    int scrollBarHeight = GetSystemMetrics(SM_CYHSCROLL);
-    int width = WINDOW_WIDTH - scrollBarWidth + SAFETY_MARGIN;
-    int height = WINDOW_HEIGHT - scrollBarHeight + SAFETY_MARGIN;
-
-    // Add checkboxes
-    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed",
-                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                       LEFT_PADDING, 0, width, BOX_HEIGHT,
-                                       hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
-    
-    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar",
-                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                       LEFT_PADDING, BOX_HEIGHT, width, BOX_HEIGHT,
-                                       hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
-    
-    SendMessage(hwndCheckbox1, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
-
-    // Create list view
-    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"",
-                                  WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER,
-                                  0, 2 * BOX_HEIGHT, width,
-                                  height - (BUTTON_HEIGHT + BOX_HEIGHT + BOX_HEIGHT + scrollBarHeight),
-                                  hwndMain, (HMENU)ID_GUI, hInstance, NULL);
-
-    SetupListView(hwndList, width);
-
-    // Create save button
-    CreateWindowEx(0, L"BUTTON", L"Save",
-                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                 -SAFETY_MARGIN, height - (BUTTON_HEIGHT + scrollBarHeight) - SAFETY_MARGIN,
-                 width + SAFETY_MARGIN, BUTTON_HEIGHT,
-                 hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
-
-    ApplyUIStyles(hwndMain, hwndList);
-}
-
 void ApplyUIStyles(HWND hwndMain, HWND hwndList) {
-    
+
     // Clean up
     if (g_hBackgroundBrush) DeleteObject(g_hBackgroundBrush);
     g_hBackgroundBrush = CreateSolidBrush(COLOR_BG);
@@ -307,17 +273,73 @@ void ApplyUIStyles(HWND hwndMain, HWND hwndList) {
         FONT_WEIGHT_NORMAL, FALSE, FALSE, FALSE,
         ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
         DEFAULT_QUALITY, DEFAULT_PITCH, FONT_NAME);
-    
+
     g_hFontBold = CreateFont(
         FONT_SIZE_BOLD, 0, 0, 0,
         FONT_WEIGHT_BOLD, FALSE, FALSE, FALSE,
         ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
         DEFAULT_QUALITY, DEFAULT_PITCH, FONT_NAME);
-    
+
     SendMessage(GetDlgItem(hwndMain, ID_GUI), WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessage(GetDlgItem(hwndMain, ID_BUTTON), WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+    SendMessage(GetDlgItem(hwndMain, ID_UPDATE_BUTTON), WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
     SendMessage(GetDlgItem(hwndMain, ID_CHECKBOX1), WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
     SendMessage(GetDlgItem(hwndMain, ID_CHECKBOX2), WM_SETFONT, (WPARAM)g_hFontBold, TRUE);
+}
+
+void SetupWindowControls(HWND hwndMain, HINSTANCE hInstance) {
+    // Get real client size
+    int scrollBarWidth = GetSystemMetrics(SM_CXVSCROLL);
+    int scrollBarHeight = GetSystemMetrics(SM_CYHSCROLL);
+    int width = WINDOW_WIDTH - scrollBarWidth + SAFETY_MARGIN;
+    int height = WINDOW_HEIGHT - scrollBarHeight + SAFETY_MARGIN;
+
+    int yOffset = 0;
+    int updateButtonHeight = 0;
+    // Create update button if needed
+    if (updateAvailable) {
+        CreateWindowEx(0, L"BUTTON", L"Update",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            -SAFETY_MARGIN, 0,
+            width + SAFETY_MARGIN, BUTTON_HEIGHT,
+            hwndMain, (HMENU)ID_UPDATE_BUTTON, hInstance, NULL);
+        updateButtonHeight = BUTTON_HEIGHT;
+    }
+    yOffset += BUTTON_HEIGHT;
+
+    // Add checkboxes
+    HWND hwndCheckbox1 = CreateWindowEx(0, L"BUTTON", L"Send to Tray also when Closed",
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+        LEFT_PADDING, yOffset, width, BOX_HEIGHT,
+        hwndMain, (HMENU)ID_CHECKBOX1, hInstance, NULL);
+    yOffset += BOX_HEIGHT;
+
+    HWND hwndCheckbox2 = CreateWindowEx(0, L"BUTTON", L"Do not show on Taskbar",
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+        LEFT_PADDING, yOffset, width, BOX_HEIGHT,
+        hwndMain, (HMENU)ID_CHECKBOX2, hInstance, NULL);
+    yOffset += BOX_HEIGHT;
+
+    SendMessage(hwndCheckbox1, BM_SETCHECK, HOOKBOTH ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(hwndCheckbox2, BM_SETCHECK, NOTASKBAR ? BST_CHECKED : BST_UNCHECKED, 0);
+
+    // Create list view
+    HWND hwndList = CreateWindowEx(0, WC_LISTVIEW, L"",
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS | LVS_NOCOLUMNHEADER,
+        0, yOffset, width,
+        height - (BUTTON_HEIGHT + BOX_HEIGHT + BOX_HEIGHT + scrollBarHeight + updateButtonHeight),
+        hwndMain, (HMENU)ID_GUI, hInstance, NULL);
+
+    SetupListView(hwndList, width);
+
+    // Create save button
+    CreateWindowEx(0, L"BUTTON", L"Save",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        -SAFETY_MARGIN, height - (BUTTON_HEIGHT + scrollBarHeight) - SAFETY_MARGIN,
+        width + SAFETY_MARGIN, BUTTON_HEIGHT,
+        hwndMain, (HMENU)ID_BUTTON, hInstance, NULL);
+
+    ApplyUIStyles(hwndMain, hwndList);
 }
 
 void CleanupResources() {
@@ -377,7 +399,8 @@ void InitializeUI(HINSTANCE hInstance) {
 void ShowAppInterface(bool minimizeToTray) {
     if (minimizeToTray) {
         MinimizeWindowToTray(hwndMain);
-    } else {
+    }
+    else {
         ShowWindow(hwndMain, SW_SHOW);
         SetForegroundWindow(hwndMain);
     }

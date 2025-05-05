@@ -3,22 +3,24 @@
 #define UNICODE
 #include <windows.h>
 #include <string>
-#include <vector>
 #include <unordered_set>
 
 #define MAXTRAYITEMS 64
 #define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
+#define VERSION L"v1.0"
 #define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
-#define IDI_ICON1       101
-#define ID_CHECKBOX1    102
-#define ID_CHECKBOX2    103
-#define ID_BUTTON       104
-#define ID_APPLIST      105
-#define ID_GUI          106
+#define IDI_ICON1        101
+#define IDI_ICON2        102
+#define ID_CHECKBOX1     103
+#define ID_CHECKBOX2     104
+#define ID_BUTTON        105
+#define ID_UPDATE_BUTTON 106
+#define ID_APPLIST       107
+#define ID_GUI           108
 
 #define WM_MIN          0x0401
 #define WM_X            0x0402
@@ -41,48 +43,45 @@ typedef struct {
     int count;
     wchar_t specialApps[MAX_SPECIAL_APPS][MAX_PATH];
 } SpecialAppsSharedData;
-BOOL DLLIMPORT InitializeSharedMemory();
-void DLLIMPORT CleanupSharedMemory();
-BOOL DLLIMPORT UpdateSpecialAppsList(const std::vector<std::wstring>& specialApps);
 
 // Global access
 extern HWND hwndMain;
 extern HWND hwndBase;
-extern HWND hwndItems[MAXTRAYITEMS];
 extern HWND hwndForMenu;
+extern HINSTANCE hInstance;
 extern std::unordered_set<std::wstring> appNames;
 extern std::unordered_set<std::wstring> specialAppNames;
 extern bool HOOKBOTH;
 extern bool NOTASKBAR;
-
-// Global variables
-extern UINT WM_TASKBAR_CREATED;
-extern HWINEVENTHOOK hEventHook;
-extern HINSTANCE hInstance;
-extern HMODULE hLib;
-extern HANDLE hSharedMemory;
-extern SpecialAppsSharedData* pSharedData;
+extern bool updateAvailable;
 
 // Hook-related functions
 BOOL DLLIMPORT RegisterHook(HMODULE);
 void DLLIMPORT UnRegisterHook();
+extern HANDLE hSharedMemory;
+extern SpecialAppsSharedData* pSharedData;
 
-// Core functions
+// Trayy.cpp
 void MinimizeWindowToTray(HWND hwnd);
-void RestoreWindowFromTray(HWND hwnd);
-void CloseWindowFromTray(HWND hwnd);
-void RefreshWindowInTray(HWND hwnd);
-bool RemoveWindowFromTray(HWND hwnd);
-int FindInTray(HWND hwnd);
-bool AddToTray(int i);
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-std::wstring getProcessName(HWND hwnd);
 bool appCheck(HWND lParam, bool restore = false);
-bool IsTopWindow(HWND hwnd);
-HICON GetWindowIcon(HWND hwnd);
 void MinimizeAll();
-void MinimizeAllInBackground();
 void RefreshTray();
-void LoadSettings();
 void SaveSettings();
-void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime);
+
+
+// Trayy_UI.cpp
+void InitializeUI(HINSTANCE hInstance);
+void ShowAppInterface(bool minimizeToTray);
+void ExecuteMenu();
+void HandleMinimizeCommand(HWND hwnd);
+void HandleCloseCommand(HWND hwnd);
+void HandleCheckboxClick(HWND hwnd, int checkboxId);
+void HandleSaveButtonClick(HWND hwnd);
+void HandleListViewNotifications(HWND hwnd, LPARAM lParam);
+void HandleUpdateButtonClick(HWND hwnd);
+void SetTrayIconUpdate();
+
+// updater.cpp
+void CheckForUpdates();
+void CheckAndUpdate(const std::wstring& currentVersion);

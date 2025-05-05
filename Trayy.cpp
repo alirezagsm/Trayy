@@ -1,5 +1,4 @@
 #include "Trayy.h"
-#include "Trayy_UI.h"
 #include <vector>
 #include <string>
 #include <fstream>
@@ -25,6 +24,7 @@ std::unordered_set<std::wstring> appNames;
 std::unordered_set<std::wstring> specialAppNames;
 bool HOOKBOTH = true;
 bool NOTASKBAR = false;
+bool updateAvailable = false;
 
 std::unordered_set<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
 std::unordered_set<std::wstring> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
@@ -65,7 +65,7 @@ BOOL InitializeSharedMemory() {
 
     // Initialize
     pSharedData->count = 0;
-    
+
     return TRUE;
 }
 
@@ -74,7 +74,7 @@ void CleanupSharedMemory() {
         UnmapViewOfFile(pSharedData);
         pSharedData = NULL;
     }
-    
+
     if (hSharedMemory) {
         CloseHandle(hSharedMemory);
         hSharedMemory = NULL;
@@ -84,10 +84,10 @@ void CleanupSharedMemory() {
 BOOL UpdateSpecialAppsList(const std::unordered_set<std::wstring>& specialApps) {
     if (!pSharedData)
         return FALSE;
-        
+
     // Clear existing data
     ZeroMemory(pSharedData, SHARED_MEM_SIZE);
-    
+
     // Update count and app names
     int idx = 0;
     for (const auto& app : specialApps) {
@@ -96,7 +96,7 @@ BOOL UpdateSpecialAppsList(const std::unordered_set<std::wstring>& specialApps) 
         idx++;
     }
     pSharedData->count = idx;
-    
+
     return TRUE;
 }
 
@@ -126,12 +126,17 @@ HICON GetWindowIcon(HWND hwnd) {
     return LoadIcon(NULL, IDI_WINLOGO);
 }
 
-bool AddToTray(int i) {  // Removed 'static' keyword
+bool AddToTray(int i) {
     NOTIFYICONDATA nid;
     ZeroMemory(&nid, sizeof(nid));
     nid.cbSize = NOTIFYICONDATA_V2_SIZE;
     nid.hWnd = hwndMain;
     nid.uID = (UINT)i;
+
+    wchar_t debugMsg[128];
+    swprintf(debugMsg, 128, L"AddToTray: hwndMain=0x%p, i=%d\n", hwndMain, i);
+    OutputDebugString(debugMsg);
+
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYCMD;
     nid.hIcon = GetWindowIcon(hwndItems[i]);
@@ -356,7 +361,7 @@ void RefreshTray() {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
         if (hwndItems[i] && IsWindow(hwndItems[i])) {
             HICON hIcon = GetWindowIcon(hwndItems[i]);
-            
+
             NOTIFYICONDATA nid;
             ZeroMemory(&nid, sizeof(nid));
             nid.cbSize = NOTIFYICONDATA_V2_SIZE;
@@ -365,7 +370,7 @@ void RefreshTray() {
             nid.uFlags = NIF_ICON | NIF_TIP;
             nid.hIcon = hIcon;
             GetWindowText(hwndItems[i], nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
-            
+
             Shell_NotifyIcon(NIM_MODIFY, &nid);
         }
     }
@@ -396,21 +401,8 @@ void MinimizeAllInBackground() {
             Sleep(10000);
         }
         MinimizeAll();
-    });
+        });
     t.detach();
-}
-
-void SaveSettings() {
-    std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
-    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
-    
-    for (const auto& appName : appNames) {
-        file << appName << std::endl;
-    }
-    file.close();
-    LoadSettings();
-    RefreshTray();
 }
 
 void LoadSettings() {
@@ -421,7 +413,8 @@ void LoadSettings() {
         std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
         file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
         file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
-    } else {
+    }
+    else {
         try {
             std::wstring line;
             std::getline(file, line);
@@ -434,14 +427,16 @@ void LoadSettings() {
                         std::wstring baseName = line.substr(0, line.length() - 1);
                         appNames.insert(baseName);
                         specialAppNames.insert(baseName);
-                    } else {
+                    }
+                    else {
                         appNames.insert(line);
                     }
                 }
             }
             file.close();
             UpdateSpecialAppsList(specialAppNames);
-        } catch (const std::exception&) {
+        }
+        catch (const std::exception&) {
             std::wstring backupFile = SETTINGS_FILE L".bak";
             CopyFile(SETTINGS_FILE, backupFile.c_str(), FALSE);
             std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
@@ -463,6 +458,19 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
             RestoreWindowFromTray(hwnd);
         }
     }
+}
+
+void SaveSettings() {
+    std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
+    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
+    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+
+    for (const auto& appName : appNames) {
+        file << appName << std::endl;
+    }
+    file.close();
+    LoadSettings();
+    RefreshTray();
 }
 
 // This function handles all window messages
@@ -491,6 +499,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         case ID_BUTTON:
             HandleSaveButtonClick(hwnd);
+            break;
+        case ID_UPDATE_BUTTON:
+            HandleUpdateButtonClick(hwnd);
             break;
         }
         break;
@@ -562,7 +573,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         RefreshTray();
         CleanupSharedMemory();
-        
+
         // Your existing PostQuitMessage call
         PostQuitMessage(0);
         break;
@@ -584,6 +595,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
 {
     hInstance = hInst;
     InitializeSharedMemory();
+
+    CheckForUpdates();
+
     LoadSettings();
 
     HWND existingApp = FindWindow(NAME, NAME);
@@ -597,7 +611,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
         MessageBox(NULL, L"Error loading hook.dll.", NAME, MB_OK | MB_ICONERROR);
         return 0;
     }
-    
+
     if (!RegisterHook(hLib)) {
         MessageBox(NULL, L"Error setting hook procedure.", NAME, MB_OK | MB_ICONERROR);
         return 0;
@@ -609,23 +623,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
         return 0;
     }
 
-    // Create hwndBase to be the main window that is hidden and used to receive messages
-    hwndBase = CreateWindowEx(0, WC_STATIC, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
-
-    // Initialize windows items array
     for (int i = 0; i < MAXTRAYITEMS; i++) {
         hwndItems[i] = NULL;
     }
-    
+
     WM_TASKBAR_CREATED = RegisterWindowMessage(L"TaskbarCreated");
 
     InitializeUI(hInstance);
     ShowAppInterface(true);
-    
+
     MinimizeAllInBackground();
     RefreshTray();
+    SetTrayIconUpdate();
 
-    // Message loop
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
