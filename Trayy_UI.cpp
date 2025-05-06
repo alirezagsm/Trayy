@@ -394,6 +394,7 @@ void InitializeUI(HINSTANCE hInstance) {
     if (hwndMain) {
         SetupWindowControls(hwndMain, hInstance);
     }
+    hwndBase = CreateWindowEx(0, WC_STATIC, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hInstance, NULL);
 }
 
 void ShowAppInterface(bool minimizeToTray) {
