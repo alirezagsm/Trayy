@@ -231,7 +231,7 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
     }
 
     // Create main window
-    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
+    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
         x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
 
     if (!hwndMain) {

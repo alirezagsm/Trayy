@@ -211,12 +211,22 @@ void RestoreWindowFromTray(HWND hwnd) {
         SetForegroundWindow(hwnd);
         return;
     }
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+
     if (NOTASKBAR) {
+        exStyle |= WS_EX_TOOLWINDOW;
+        exStyle &= ~WS_EX_APPWINDOW;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
         SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
     }
     else {
+        exStyle |= WS_EX_APPWINDOW;
+        exStyle &= ~WS_EX_TOOLWINDOW;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
         SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
     }
+
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
 }
