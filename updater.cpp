@@ -83,10 +83,8 @@ void SetTrayIconUpdate() {
     NOTIFYICONDATA nid = { sizeof(NOTIFYICONDATA) };
     nid.hWnd = hwndMain;
     nid.uID = 0;
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    nid.uCallbackMessage = WM_TRAYCMD;
+    nid.uFlags = NIF_ICON;
     nid.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON2));
-    wcscpy_s(nid.szTip, L"Update available! Click to download.");
     Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
@@ -104,7 +102,7 @@ bool NeedsUpdate(const std::wstring& latestVersion) {
         if (start < v.size())
             parts.push_back(std::stoi(v.substr(start)));
         return parts;
-    };
+        };
 
     std::vector<int> curVer = parseVersion(VERSION);
     std::vector<int> latVer = parseVersion(latestVersion);

@@ -39,7 +39,7 @@
 			"type": "shell",
 			"command": "",
 			"args": [
-				"Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res, Trayy_UI.obj -Force -ErrorAction SilentlyContinue"
+				"Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res, Trayy_UI.obj updater.obj -Force -ErrorAction SilentlyContinue"
 			],
 			"options": {
 				"shell": {

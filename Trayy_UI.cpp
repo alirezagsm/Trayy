@@ -382,7 +382,7 @@ void ExecuteMenu() {
     }
     GetCursorPos(&point);
 
-    SetForegroundWindow(hwndBase);
+    SetForegroundWindow(hwndMain);
     TrackPopupMenu(hMenu, TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RIGHTALIGN | TPM_BOTTOMALIGN, point.x, point.y, 0, hwndMain, NULL);
 
     PostMessage(hwndMain, WM_USER, 0, 0);

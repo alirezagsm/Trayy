@@ -627,11 +627,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
     InitializeUI(hInstance);
     ShowAppInterface(true);
 
+    MinimizeAllInBackground();
+    RefreshTray();
     if (updateAvailable) {
         SetTrayIconUpdate();
     }
-    MinimizeAllInBackground();
-    RefreshTray();
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
