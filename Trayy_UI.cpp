@@ -5,6 +5,7 @@
 #include <thread>
 #include <CommCtrl.h>
 #include <shellapi.h>
+#include <algorithm>
 
 // UI parameters and constants
 #define DPI_SCALE (GetDpiForWindow(GetDesktopWindow()) / 96.0)
@@ -46,7 +47,11 @@ void setLVItems(HWND hwndList) {
         ListView_InsertItem(hwndList, &lvi);
     }
     int i = 0;
-    for (const auto& appName : appNames)
+    
+    std::vector<std::wstring> appNamesSorted(appNames.begin(), appNames.end());
+    std::sort(appNamesSorted.begin(), appNamesSorted.end());
+
+    for (const auto& appName : appNamesSorted)
     {
         lvi.iItem = i;
         std::wstring displayName = appName;
