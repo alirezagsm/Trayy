@@ -39,7 +39,7 @@
 			"type": "shell",
 			"command": "",
 			"args": [
-				"Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res, Trayy_UI.obj -Force -ErrorAction SilentlyContinue"
+				"Remove-Item -Path Trayy.exe, hook.dll, hook.obj, Trayy.res, Trayy_UI.obj updater.obj -Force -ErrorAction SilentlyContinue"
 			],
 			"options": {
 				"shell": {
@@ -56,6 +56,7 @@
 			"args": [
 				"Trayy.cpp",
 				"Trayy_UI.cpp",
+				"updater.cpp",
 				"Trayy.res",
 				"/EHsc",
 				"/Zi",
@@ -68,7 +69,9 @@
 				"Shlwapi.lib",
 				"Advapi32.lib",
 				"Shell32.lib",
-				"Comctl32.lib"
+				"Comctl32.lib",
+				"ole32.lib",
+				"oleaut32.lib",
 			],
 			"dependsOn": ["Build hook"],
 			"dependsOrder": "sequence",
@@ -81,10 +84,12 @@
 			"args": [
 				"Trayy.cpp",
 				"Trayy_UI.cpp",
+				"updater.cpp",
 				"Trayy.res",
 				"/EHsc",
 				"/nologo",
 				"/O2",
+				"/std:c++17",
 				"/Fe:Trayy.exe",
 				"/link",
 				"hook.lib",
@@ -92,7 +97,9 @@
 				"Shlwapi.lib",
 				"Advapi32.lib",
 				"Shell32.lib",
-				"Comctl32.lib"
+				"Comctl32.lib",
+				"ole32.lib",
+				"oleaut32.lib",
 			],
 			"dependsOn": ["Build hook"],
 			"dependsOrder": "sequence",

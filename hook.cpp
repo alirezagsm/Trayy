@@ -5,6 +5,8 @@
 static HHOOK _hMouse = NULL;
 static HHOOK _hLLMouse = NULL;
 static HWND _hLastHit = NULL;
+static HANDLE _hSharedMemory = NULL;
+static SpecialAppsSharedData* _pSharedData = NULL;
 
 bool ActivateWindow(HWND hwnd) {
     if (!IsWindow(hwnd))
@@ -23,11 +25,72 @@ bool ActivateWindow(HWND hwnd) {
 inline void SendWindowAction(HWND hwnd, bool isMinimize) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
-        PostMessage(mainWindow, 
-                    isMinimize ? WM_MIN : WM_X, 
-                    0, 
+        PostMessage(mainWindow,
+                    isMinimize ? WM_MIN : WM_X,
+                    0,
                     reinterpret_cast<LPARAM>(hwnd));
     }
+}
+
+bool AccessSharedMemory() {
+    if (_pSharedData != NULL)
+        return true;
+
+    _hSharedMemory = OpenFileMapping(
+        FILE_MAP_ALL_ACCESS,
+        FALSE,
+        SHARED_MEM_NAME);
+    
+    if (_hSharedMemory == NULL) {
+        return false;
+    }
+
+    _pSharedData = (SpecialAppsSharedData*)MapViewOfFile(
+        _hSharedMemory,
+        FILE_MAP_ALL_ACCESS,
+        0,
+        0,
+        SHARED_MEM_SIZE);
+    
+    if (_pSharedData == NULL) {
+        CloseHandle(_hSharedMemory);
+        _hSharedMemory = NULL;
+        return false;
+    }
+    
+    return true;
+}
+
+void ReleaseSharedMemory() {
+    if (_pSharedData) {
+        UnmapViewOfFile(_pSharedData);
+        _pSharedData = NULL;
+    }
+    
+    if (_hSharedMemory) {
+        CloseHandle(_hSharedMemory);
+        _hSharedMemory = NULL;
+    }
+}
+
+bool IsSpecialApp(const std::wstring& processName) {
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+        
+    std::wstring nameWithoutExt = processName;
+    
+    size_t extPos = nameWithoutExt.rfind(L'.');
+    if (extPos != std::wstring::npos) {
+        nameWithoutExt = nameWithoutExt.substr(0, extPos);
+    }
+    
+    for (int i = 0; i < _pSharedData->count; i++) {
+        if (_wcsicmp(_pSharedData->specialApps[i], nameWithoutExt.c_str()) == 0) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 // Mouse hook to handle non-client area clicks
@@ -115,7 +178,7 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             
         std::wstring processName = getProcessName(hwnd);
         
-        if (!processName.empty() && wcscmp(processName.c_str(), L"thunderbird.exe") == 0) {
+        if (!processName.empty() && IsSpecialApp(processName)) {
             // Calculate position relative to window
             RECT windowRect;
             if (!GetWindowRect(hwnd, &windowRect))
@@ -145,7 +208,7 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             bool isHitX = isInTitleBar && (relativeX >= closeButtonLeft);
             bool isHitMin = isInTitleBar && (relativeX >= minimizeButtonLeft) && (relativeX < maximizeButtonLeft);
 
-            // Handle button clicks for Thunderbird
+            // Handle button clicks for special apps
             if (wParam == WM_LBUTTONDOWN) {
                 if (isHitX || isHitMin) {
                     _hLastHit = hwnd;
@@ -155,7 +218,7 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 } else {
                     _hLastHit = NULL;
                 }
-            } 
+            }
             else if (wParam == WM_LBUTTONUP && hwnd == _hLastHit) {
                 if (isHitX || isHitMin) {
                     SendWindowAction(hwnd, isHitMin);
@@ -197,4 +260,5 @@ void DLLIMPORT UnRegisterHook() {
         UnhookWindowsHookEx(_hLLMouse);
         _hLLMouse = NULL;
     }
+    ReleaseSharedMemory();
 }
