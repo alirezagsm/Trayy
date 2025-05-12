@@ -6,6 +6,9 @@
 
 <p align="center">
 Ever wished you could tell some apps to chill in the system tray? </br>Say hello to Trayy, your desktop's new bouncer!
+</br>
+</br  >
+<img src="https://img.shields.io/github/downloads/alirezagsm/Trayy/total.svg" alt="GitHub downloads"/>
 </p>
 
 ## 🎯 Features
