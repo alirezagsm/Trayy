@@ -41,3 +41,7 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 ## 🙏 Acknowledgements
 
 This project is inspired by RBTray.
+
+If Trayy made your workflow smoother, consider supporting its development! ☕✨
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q21EOKMX)
