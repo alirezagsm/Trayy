@@ -6,6 +6,9 @@
 
 <p align="center">
 Ever wished you could tell some apps to chill in the system tray? </br>Say hello to Trayy, your desktop's new bouncer!
+</br>
+</br  >
+<img src="https://img.shields.io/github/downloads/alirezagsm/Trayy/total.svg" alt="GitHub downloads"/>
 </p>
 
 ## 🎯 Features
@@ -24,9 +27,9 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
    - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray.
    - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
 4. Now, list out your favorite applications (case-sensitive).
-   - Trayy will keep an eye out for any Windows process names that match your entries.
-   - For Web Apps, Trayy will look for tab names that contain your specified string.
-   - Got an app (like Thunderbird) that doesn’t play nice with Trayy's standard functionality? Just add an asterisk `*` to the end of its name (e.g., `Thunderbird*`). This tells Trayy to use a special method to detect minimize or close actions by looking for clicks on the top-right of the titlebar, so even tricky programs can be tucked away smoothly!
+   - Trayy will keep an eye out for any process name as seen in Task Manager that match your entries. For example for `Notepad.exe` you need to add `Notepad` to your lineup.
+   - For Web Apps, Trayy will look for browser tab titles that contain your specified string. For example `WhatsApp Web`. Use distinctive keywords to avoid accidental matches!
+   - Got an app (like Thunderbird) that doesn’t play nice with Trayy's standard functionality? Just add an asterisk `*` to the end of its name (e.g. `Thunderbird*`). This tells Trayy to use a special method to detect minimize or close actions by looking for clicks on the top-right of the titlebar, so even tricky programs can be tucked away smoothly!
    - **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
 5. Hit Save and BAM! Depending on your settings, your chosen applications will now be tucked away neatly in the system tray.
 6. Click on a tray icon to bring its application into the spotlight. If it's already in focus, it'll sneak back into the tray. This way, you can quickly peek at your apps without breaking your workflow!
