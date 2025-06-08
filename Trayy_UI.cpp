@@ -184,7 +184,7 @@ void HandleCloseCommand(HWND hwnd) {
         MinimizeWindowToTray((HWND)hwnd);
     }
     else {
-        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
+        PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
     }
 }
 
