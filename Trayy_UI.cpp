@@ -47,7 +47,7 @@ void setLVItems(HWND hwndList) {
         ListView_InsertItem(hwndList, &lvi);
     }
     int i = 0;
-    
+
     std::vector<std::wstring> appNamesSorted(appNames.begin(), appNames.end());
     std::sort(appNamesSorted.begin(), appNamesSorted.end());
 
@@ -184,7 +184,15 @@ void HandleCloseCommand(HWND hwnd) {
         MinimizeWindowToTray((HWND)hwnd);
     }
     else {
-        PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+        wchar_t windowName[256];
+        GetWindowText(hwnd, windowName, 256);
+
+        if (wcslen(windowName) == 0) {
+            SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
+        }
+        else {
+            PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+        }
     }
 }
 
