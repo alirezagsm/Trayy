@@ -83,7 +83,7 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
     }
 
     // Create main window
-    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
+    HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
         x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
 
     if (!hwndMain) {
@@ -279,24 +279,33 @@ void HandleUpdateButtonClick(HWND hwnd) {
 static void PushGreenButtonStyle() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
+    // Use the window background color for button text so it adapts to light/dark mode
+    ImVec4 textCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    ImGui::PushStyleColor(ImGuiCol_Text, textCol);
 }
 
 static void PushRedButtonStyle() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+    ImVec4 textCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    ImGui::PushStyleColor(ImGuiCol_Text, textCol);
 }
 
 static void PushBlueButtonStyle() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.36f, 0.69f, 0.98f, 1.0f));
+    ImVec4 textCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    ImGui::PushStyleColor(ImGuiCol_Text, textCol);
 }
 
 static void PushDarkBlueButtonStyle() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.12f, 0.44f, 0.78f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.52f, 0.90f, 1.0f));
+    ImVec4 textCol = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    ImGui::PushStyleColor(ImGuiCol_Text, textCol);
 }
 
-static void PopButtonStyle() { ImGui::PopStyleColor(2); }
+static void PopButtonStyle() { ImGui::PopStyleColor(3); }
 
 static void ReplaceAppName(const std::wstring& oldName, const std::wstring& newName, bool preserveSpecialFlag) {
     if (oldName == newName || newName.empty()) return;
@@ -471,7 +480,7 @@ void RenderMainUI() {
 
     ImGui::Checkbox("Send to Tray also when Closed", &HOOKBOTH);
     ImGui::Checkbox("Do not show on Taskbar", &NOTASKBAR);
-    ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+    ImGui::Spacing();
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.60f, 1.0f));
     ImGui::PopStyleColor();
