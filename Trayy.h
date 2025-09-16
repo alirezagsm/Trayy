@@ -35,7 +35,8 @@
 
 #define SHARED_MEM_NAME L"TraySpecialApps"
 #define SHARED_MEM_SIZE (MAX_SPECIAL_APPS * MAX_PATH * sizeof(wchar_t))
-
+#define IMGUI_TIMER_ID 0x0501
+#define IMGUI_TIMER_MS 40 // ~24 FPS
 #define DLLIMPORT __declspec(dllexport)
 
 // Shared Memory
@@ -69,18 +70,23 @@ void MinimizeAll();
 void RefreshTray();
 void SaveSettings();
 
-
 // Trayy_UI.cpp
 void InitializeUI(HINSTANCE hInstance);
 void ShowAppInterface(bool minimizeToTray);
 void ExecuteMenu();
 void HandleMinimizeCommand(HWND hwnd);
 void HandleCloseCommand(HWND hwnd);
-void HandleCheckboxClick(HWND hwnd, int checkboxId);
-void HandleSaveButtonClick(HWND hwnd);
-void HandleListViewNotifications(HWND hwnd, LPARAM lParam);
 void HandleUpdateButtonClick(HWND hwnd);
 void SetTrayIconUpdate();
+bool InitializeImGui(HWND hwnd);
+void CleanupImGui();
+void RenderImGuiFrame();
+void RenderMainUI();
+void MarkAppListDirty();
+LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+// Allow UI to notify shared-memory of special apps
+BOOL UpdateSpecialAppsList(const std::unordered_set<std::wstring>& specialApps);
 
 // updater.cpp
 void CheckForUpdates();

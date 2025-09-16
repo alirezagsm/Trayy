@@ -6,10 +6,8 @@
 #include <thread>
 #include <set>
 #include <unordered_set>
-#include <stdio.h>
 #include <psapi.h>
-
-#pragma comment(lib, "Gdi32.lib")
+#include <algorithm>
 
 // Global variables
 UINT WM_TASKBAR_CREATED;
@@ -28,7 +26,7 @@ bool updateAvailable = false;
 
 std::unordered_set<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
 std::unordered_set<std::wstring> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
-std::unordered_set<std::wstring> UseWindowName = { L"thunderbird.exe", L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
+std::unordered_set<std::wstring> UseWindowName = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
 
 // Shared memory variables
 HANDLE hSharedMemory = NULL;
@@ -306,8 +304,25 @@ bool appCheck(HWND lParam, bool restore) {
     }
 
     // Change to window name if needed
+    bool switchedProcessName = false;
     if (UseWindowName.find(processName) != UseWindowName.end()) {
         processName = windowName;
+        switchedProcessName = true;
+    }
+
+    // Multi-window support
+    if (!switchedProcessName) {} {
+        size_t prefixLen = std::min<size_t>(4, processName.size());
+        std::wstring prefix = processName.substr(0, prefixLen);
+        std::wstring windowLower = windowNameStr;
+        std::wstring prefixLower = prefix;
+        std::transform(windowLower.begin(), windowLower.end(), windowLower.begin(), ::towlower);
+        std::transform(prefixLower.begin(), prefixLower.end(), prefixLower.begin(), ::towlower);
+        if (windowLower.find(prefixLower) == std::wstring::npos) {
+            std::wstring debugMsg = L"Skipping " + processName + L" with window name " + windowNameStr + L"\n";
+            OutputDebugString(debugMsg.c_str());
+            return false;
+        }
     }
 
     for (const auto& appName : appNames) {
@@ -419,8 +434,9 @@ void LoadSettings() {
             NOTASKBAR = line.find(L"true") != std::string::npos;
             while (std::getline(file, line)) {
                 if (!line.empty()) {
-                    if (line.back() == L'*') {
-                        std::wstring baseName = line.substr(0, line.length() - 1);
+                    // If line begins with '*' it's a graphical (special) app; store without the '*'
+                    if (line[0] == L'*') {
+                        std::wstring baseName = line.substr(1);
                         appNames.insert(baseName);
                         specialAppNames.insert(baseName);
                     }
@@ -440,6 +456,8 @@ void LoadSettings() {
             file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
         }
     }
+    // Notify ImGui that the app list has changed
+    MarkAppListDirty();
 }
 
 void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
@@ -461,8 +479,14 @@ void SaveSettings() {
     file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
     file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
 
+    // Write special apps with leading '*' marker so the visible name stays unmodified
     for (const auto& appName : appNames) {
-        file << appName << std::endl;
+        if (specialAppNames.find(appName) != specialAppNames.end()) {
+            file << L"*" << appName << std::endl;
+        }
+        else {
+            file << appName << std::endl;
+        }
     }
     file.close();
     LoadSettings();
@@ -471,7 +495,46 @@ void SaveSettings() {
 
 // This function handles all window messages
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    // Handle ImGui messages first
+    LRESULT imguiResult = HandleImGuiMessages(hwnd, msg, wParam, lParam);
+    // Debug mouse messages
     switch (msg) {
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_MOUSEWHEEL:
+    case WM_SETCURSOR:
+    case WM_MOUSELEAVE:
+    {
+        char buf[256];
+        sprintf_s(buf, sizeof(buf), "WndProc: msg=0x%X, HandleImGuiMessages returned=%ld\n", msg, (long)imguiResult);
+        OutputDebugStringA(buf);
+        break;
+    }
+    default:
+        break;
+    }
+
+    if (imguiResult != -1) return imguiResult; // -1 means message not handled
+
+    switch (msg) {
+    case WM_TIMER:
+        if (wParam == IMGUI_TIMER_ID) {
+            // Periodic ImGui render tick
+            RenderImGuiFrame();
+            return 0;
+        }
+        break;
+    case WM_PAINT:
+        // Render ImGui instead of default paint
+        RenderImGuiFrame();
+        ValidateRect(hwnd, NULL);
+        return 0;
+    case WM_ERASEBKGND:
+        // Prevent background erasing to avoid flicker
+        return 1;
     case WM_COMMAND:
     {
         switch (LOWORD(wParam)) {
@@ -484,21 +547,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case IDM_ABOUT:
             ShellExecute(NULL, L"open", ABOUT_URL, NULL, NULL, SW_SHOWNORMAL);
             break;
-        case ID_CHECKBOX1:
-            HandleCheckboxClick(hwnd, ID_CHECKBOX1);
-            break;
-        case ID_CHECKBOX2:
-            HandleCheckboxClick(hwnd, ID_CHECKBOX2);
-            break;
         case IDM_EXIT:
             SendMessage(hwnd, WM_DESTROY, 0, 0);
             break;
-        case ID_BUTTON:
-            HandleSaveButtonClick(hwnd);
-            break;
-        case ID_UPDATE_BUTTON:
-            HandleUpdateButtonClick(hwnd);
-            break;
+            // Note: Checkbox and button handling is now done in ImGui directly
         }
         break;
     }
@@ -550,9 +602,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     }
-    case WM_NOTIFY:
-        HandleListViewNotifications(hwnd, lParam);
-        break;
     case WM_DESTROY:
     {
         NOTASKBAR = false;
@@ -569,8 +618,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         RefreshTray();
         CleanupSharedMemory();
-
-        // Your existing PostQuitMessage call
+        CleanupImGui();
         PostQuitMessage(0);
         break;
     }
