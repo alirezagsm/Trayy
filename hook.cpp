@@ -11,13 +11,13 @@ static SpecialAppsSharedData* _pSharedData = NULL;
 bool ActivateWindow(HWND hwnd) {
     if (!IsWindow(hwnd))
         return false;
-        
+
     if (GetForegroundWindow() == hwnd)
         return true;
-        
+
     if (IsIconic(hwnd))
         ShowWindow(hwnd, SW_RESTORE);
-    
+
     SetForegroundWindow(hwnd);
     return (GetForegroundWindow() == hwnd);
 }
@@ -26,9 +26,9 @@ inline void SendWindowAction(HWND hwnd, bool isMinimize) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
         PostMessage(mainWindow,
-                    isMinimize ? WM_MIN : WM_X,
-                    0,
-                    reinterpret_cast<LPARAM>(hwnd));
+            isMinimize ? WM_MIN : WM_X,
+            0,
+            reinterpret_cast<LPARAM>(hwnd));
     }
 }
 
@@ -40,7 +40,7 @@ bool AccessSharedMemory() {
         FILE_MAP_ALL_ACCESS,
         FALSE,
         SHARED_MEM_NAME);
-    
+
     if (_hSharedMemory == NULL) {
         return false;
     }
@@ -51,13 +51,13 @@ bool AccessSharedMemory() {
         0,
         0,
         SHARED_MEM_SIZE);
-    
+
     if (_pSharedData == NULL) {
         CloseHandle(_hSharedMemory);
         _hSharedMemory = NULL;
         return false;
     }
-    
+
     return true;
 }
 
@@ -66,7 +66,7 @@ void ReleaseSharedMemory() {
         UnmapViewOfFile(_pSharedData);
         _pSharedData = NULL;
     }
-    
+
     if (_hSharedMemory) {
         CloseHandle(_hSharedMemory);
         _hSharedMemory = NULL;
@@ -76,20 +76,20 @@ void ReleaseSharedMemory() {
 bool IsSpecialApp(const std::wstring& processName) {
     if (!AccessSharedMemory() || !_pSharedData)
         return false;
-        
+
     std::wstring nameWithoutExt = processName;
-    
+
     size_t extPos = nameWithoutExt.rfind(L'.');
     if (extPos != std::wstring::npos) {
         nameWithoutExt = nameWithoutExt.substr(0, extPos);
     }
-    
+
     for (int i = 0; i < _pSharedData->count; i++) {
         if (_wcsicmp(_pSharedData->specialApps[i], nameWithoutExt.c_str()) == 0) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -97,16 +97,16 @@ bool IsSpecialApp(const std::wstring& processName) {
 LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0)
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
-    
+
     MOUSEHOOKSTRUCT* info = reinterpret_cast<MOUSEHOOKSTRUCT*>(lParam);
     if (!info)
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
-    
+
     if ((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCLBUTTONUP)) {
         if (info->wHitTestCode != HTCLIENT) {
             const BOOL isHitMin = (info->wHitTestCode == HTMINBUTTON);
             const BOOL isHitX = (info->wHitTestCode == HTCLOSE);
-            
+
             if ((wParam == WM_NCLBUTTONDOWN) && (isHitMin || isHitX)) {
                 _hLastHit = info->hwnd;
                 if (ActivateWindow(info->hwnd))
@@ -128,7 +128,7 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     else if ((wParam == WM_LBUTTONDOWN) || (wParam == WM_RBUTTONUP)) {
         _hLastHit = NULL;
     }
-    
+
     return CallNextHookEx(_hMouse, nCode, wParam, lParam);
 }
 
@@ -168,37 +168,43 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     MSLLHOOKSTRUCT* info = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
     if (!info)
         return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
-    
+
     if (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONUP) {
         POINT pt = info->pt;
         HWND hwnd = WindowFromPoint(pt);
-        
+
         if (!hwnd)
             return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
-            
+
         std::wstring processName = getProcessName(hwnd);
-        
+
         if (!processName.empty() && IsSpecialApp(processName)) {
             // Calculate position relative to window
             RECT windowRect;
             if (!GetWindowRect(hwnd, &windowRect))
                 return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
-                
+
             int windowWidth = windowRect.right - windowRect.left;
             int relativeX = pt.x - windowRect.left;
             int relativeY = pt.y - windowRect.top;
-            
+
             // Get DPI scale
             float dpiScale = GetWindowDpiScale(hwnd);
-            
+
             // Calculate sizes
             const int captionHeight = GetSystemMetrics(SM_CYCAPTION);
             const int frameHeight = GetSystemMetrics(SM_CYFRAME);
             const int borderPadding = GetSystemMetrics(SM_CXPADDEDBORDER);
-            const int baseButtonWidth = GetSystemMetrics(SM_CXSIZE);
-            
-            int titleBarHeight = static_cast<int>((captionHeight + frameHeight + borderPadding) * dpiScale) + 4;
-            int buttonWidth = static_cast<int>(baseButtonWidth * dpiScale * 1.431); // button width to height ratio
+
+            // custom scaling for specific apps
+            float aspectRatio = 1.64f;
+            int offsetY = -12;
+            if (processName.find(L"thunderbird") != std::wstring::npos) {
+                aspectRatio = 1.5f;
+                offsetY = -1;
+            }
+            int titleBarHeight = (captionHeight + frameHeight + borderPadding * 2 + offsetY) * dpiScale;
+            int buttonWidth = titleBarHeight * aspectRatio;
             int closeButtonLeft = windowWidth - buttonWidth;
             int maximizeButtonLeft = closeButtonLeft - buttonWidth;
             int minimizeButtonLeft = maximizeButtonLeft - buttonWidth;
@@ -215,7 +221,8 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
                     if (ActivateWindow(hwnd)) {
                         return 1; // Consume the message
                     }
-                } else {
+                }
+                else {
                     _hLastHit = NULL;
                 }
             }
@@ -240,10 +247,10 @@ BOOL DLLIMPORT RegisterHook(HMODULE hLib) {
     if (FAILED(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE))) {
         SetProcessDPIAware();
     }
-    
+
     _hMouse = SetWindowsHookEx(WH_MOUSE, MouseProc, hLib, 0);
     _hLLMouse = SetWindowsHookEx(WH_MOUSE_LL, LLMouseProc, hLib, 0);
-    
+
     if (_hMouse == NULL && _hLLMouse == NULL) {
         UnRegisterHook();
         return FALSE;
