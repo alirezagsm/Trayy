@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <psapi.h>
 #include <algorithm>
+#include <codecvt>
+#include <locale>
 
 // Global variables
 UINT WM_TASKBAR_CREATED;
@@ -487,10 +489,11 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
 
 void SaveSettings() {
     std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
-    file << "HOOKBOTH " << (HOOKBOTH ? "true" : "false") << std::endl;
-    file << "NOTASKBAR " << (NOTASKBAR ? "true" : "false") << std::endl;
+    file.imbue(std::locale(file.getloc(),
+        new std::codecvt_utf8<wchar_t, 0x10ffff, std::generate_header>));
+    file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
+    file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
 
-    // Write special apps with leading '*' marker so the visible name stays unmodified
     for (const auto& appName : appNames) {
         if (specialAppNames.find(appName) != specialAppNames.end()) {
             file << L"*" << appName << std::endl;
@@ -502,7 +505,6 @@ void SaveSettings() {
     file.close();
     LoadSettings();
 }
-
 void HandleMinimizeCommand(HWND hwnd) {
     if (appCheck((HWND)hwnd)) {
         MinimizeWindowToTray((HWND)hwnd);

@@ -1,6 +1,7 @@
 #pragma once
 #define LEAN_AND_MEAN
 #define UNICODE
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 #include <windows.h>
 #include <string>
 #include <unordered_set>
@@ -40,6 +41,8 @@
 #define SHARED_MEM_NAME L"TraySpecialApps"
 #define SHARED_MEM_SIZE (MAX_SPECIAL_APPS * MAX_PATH * sizeof(wchar_t))
 #define DLLIMPORT __declspec(dllexport)
+
+
 
 // Shared Memory
 typedef struct {
