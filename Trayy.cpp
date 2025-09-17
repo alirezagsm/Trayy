@@ -266,6 +266,25 @@ void RefreshWindowInTray(HWND hwnd) {
     }
 }
 
+void ReinstateTaskbarState() {
+    for (int i = 0; i < MAXTRAYITEMS; i++) {
+        if (hwndItems[i] != NULL && hwndItems[i] != hwndMain) {
+            if (!IsWindowVisible(hwndItems[i])) {
+                continue;
+            }
+            if (NOTASKBAR) {
+                SetWindowLongPtr(hwndItems[i], GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
+            }
+            else {
+                SetWindowLongPtr(hwndItems[i], GWLP_HWNDPARENT, 0);
+            }
+            // force taskbar refresh
+            SetWindowPos(hwndItems[i], HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        }
+    }
+}
+
 void RefreshTray() {
     for (int i = 0; i < MAXTRAYITEMS; i++) {
         if (hwndItems[i] != NULL && hwndItems[i] != hwndMain) {

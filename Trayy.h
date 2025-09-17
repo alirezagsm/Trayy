@@ -74,6 +74,7 @@ bool appCheck(HWND hwnd, bool RClick = false);
 void MinimizeAll();
 void RefreshTray();
 void SaveSettings();
+void ReinstateTaskbarState();
 
 // Trayy_UI.cpp
 void InitializeUI(HINSTANCE hInstance);

@@ -681,7 +681,10 @@ void RenderMainUI() {
     // Save button
     PushBlueButtonStyle();
     if (ImGui::Button("Save Settings", ImVec2(-1, -1))) {
-        SaveSettings(); RefreshTray(); MinimizeWindowToTray(hwndMain);
+        SaveSettings();
+        RefreshTray();
+        MinimizeWindowToTray(hwndMain);
+        ReinstateTaskbarState();
     }
     PopButtonStyle();
 
