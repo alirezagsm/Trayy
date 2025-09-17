@@ -9,7 +9,7 @@
 #define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
-#define VERSION L"v1.02"
+#define VERSION L"v1.8"
 #define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
@@ -24,19 +24,21 @@
 
 #define WM_MIN          0x0401
 #define WM_X            0x0402
-#define WM_REMTRAY      0x0403
-#define WM_REFRTRAY     0x0404
-#define WM_TRAYCMD      0x0405
+#define WM_MIN_R        0x0403
+#define WM_X_R          0x0404
+#define WM_REMTRAY      0x0405
+#define WM_REFRTRAY     0x0406
+#define WM_TRAYCMD      0x0407
 #define IDM_RESTORE     0x1001
 #define IDM_CLOSE       0x1002
 #define IDM_EXIT        0x1003
 #define IDM_LIST        0x1004
 #define IDM_ABOUT       0x1005
+#define IMGUI_TIMER_ID  0x0501
 
+#define IMGUI_TIMER_MS 40 // ~24 FPS
 #define SHARED_MEM_NAME L"TraySpecialApps"
 #define SHARED_MEM_SIZE (MAX_SPECIAL_APPS * MAX_PATH * sizeof(wchar_t))
-#define IMGUI_TIMER_ID 0x0501
-#define IMGUI_TIMER_MS 40 // ~24 FPS
 #define DLLIMPORT __declspec(dllexport)
 
 // Shared Memory
@@ -65,7 +67,7 @@ extern SpecialAppsSharedData* pSharedData;
 // Trayy.cpp
 void MinimizeWindowToTray(HWND hwnd);
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-bool appCheck(HWND lParam, bool restore = false);
+bool appCheck(HWND hwnd, bool RClick = false);
 void MinimizeAll();
 void RefreshTray();
 void SaveSettings();

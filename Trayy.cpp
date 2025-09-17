@@ -177,83 +177,6 @@ void MinimizeWindowToTray(HWND hwnd) {
     }
 }
 
-static bool RemoveFromTray(int i) {
-    NOTIFYICONDATA nid;
-    ZeroMemory(&nid, sizeof(nid));
-    nid.cbSize = NOTIFYICONDATA_V2_SIZE;
-    nid.hWnd = hwndMain;
-    nid.uID = (UINT)i;
-    if (!Shell_NotifyIcon(NIM_DELETE, &nid)) {
-        return false;
-    }
-    return true;
-}
-
-bool RemoveWindowFromTray(HWND hwnd) {
-    int i = FindInTray(hwnd);
-    if (i == -1) {
-        return false;
-    }
-    if (!RemoveFromTray(i)) {
-        return false;
-    }
-    hwndItems[i] = NULL;
-    return true;
-}
-
-void RestoreWindowFromTray(HWND hwnd) {
-    wchar_t windowName[256];
-    GetWindowText(hwnd, windowName, 256);
-    if (wcsstr(windowName, NAME) != nullptr) {
-        ShowWindow(hwnd, SW_SHOW);
-        SetForegroundWindow(hwnd);
-        return;
-    }
-
-    if (NOTASKBAR) {
-        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
-    }
-    else {
-        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
-    }
-    ShowWindow(hwnd, SW_SHOW);
-    SetForegroundWindow(hwnd);
-}
-
-void CloseWindowFromTray(HWND hwnd) {
-    ShowWindow(hwnd, SW_SHOW);
-    PostMessage(hwnd, WM_CLOSE, 0, 0);
-
-    Sleep(50);
-    if (IsWindow(hwnd)) {
-        Sleep(50);
-    }
-
-    if (!IsWindow(hwnd)) {
-        RemoveWindowFromTray(hwnd);
-    }
-}
-
-void RefreshWindowInTray(HWND hwnd) {
-    int i = FindInTray(hwnd);
-    if (i == -1) {
-        return;
-    }
-    if (!IsWindow(hwnd)) {
-        RemoveWindowFromTray(hwnd);
-    }
-    else {
-        NOTIFYICONDATA nid;
-        ZeroMemory(&nid, sizeof(nid));
-        nid.cbSize = NOTIFYICONDATA_V2_SIZE;
-        nid.hWnd = hwnd;
-        nid.uID = (UINT)i;
-        nid.uFlags = NIF_TIP;
-        GetWindowText(hwnd, nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
-    }
-}
-
 std::wstring getProcessName(HWND hwnd) {
     DWORD processId;
     GetWindowThreadProcessId(hwnd, &processId);
@@ -273,18 +196,121 @@ std::wstring getProcessName(HWND hwnd) {
     return std::wstring(processName);
 }
 
-bool appCheck(HWND lParam, bool restore) {
+bool RemoveWindowFromTray(HWND hwnd) {
+    int i = FindInTray(hwnd);
+    if (i == -1) {
+        return false;
+    }
+    NOTIFYICONDATA nid;
+    ZeroMemory(&nid, sizeof(nid));
+    nid.cbSize = NOTIFYICONDATA_V2_SIZE;
+    nid.hWnd = hwndMain;
+    nid.uID = (UINT)i;
+    if (!Shell_NotifyIcon(NIM_DELETE, &nid)) {
+        return false;
+    }
+    hwndItems[i] = NULL;
+    return true;
+}
+
+std::wstring IsInAppNames(HWND hwnd) {
+    std::wstring processName = getProcessName(hwnd);
     wchar_t windowName[256];
-    GetWindowText(lParam, windowName, 256);
+    GetWindowText(hwnd, windowName, 256);
+    if (UseWindowName.find(processName) != UseWindowName.end()) {
+        processName = windowName;
+    }
+
+    bool found = false;
+    for (const auto& appName : appNames) {
+        if (!appName.empty() && processName.find(appName) != std::wstring::npos) {
+            found = true;
+            break;
+        }
+    }
+    if (found) {
+        return L"found";
+    }
+    size_t extPos = processName.rfind(L'.');
+    if (extPos != std::wstring::npos) {
+        processName = processName.substr(0, extPos);
+    }
+    return processName;
+}
+
+
+void RefreshWindowInTray(HWND hwnd) {
+    int i = FindInTray(hwnd);
+    if (i == -1) {
+        return;
+    }
+    if (!IsWindow(hwnd)) {
+        RemoveWindowFromTray(hwnd);
+    }
+    else {
+        if (IsInAppNames(hwnd) != L"found") {
+            RemoveWindowFromTray(hwnd);
+            return;
+        }
+
+        NOTIFYICONDATA nid;
+        ZeroMemory(&nid, sizeof(nid));
+        nid.cbSize = NOTIFYICONDATA_V2_SIZE;
+        nid.hWnd = hwnd;
+        nid.uID = (UINT)i;
+        nid.uFlags = NIF_TIP;
+        GetWindowText(hwnd, nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+    }
+}
+
+void RefreshTray() {
+    for (int i = 0; i < MAXTRAYITEMS; i++) {
+        if (hwndItems[i] != NULL && hwndItems[i] != hwndMain) {
+            RefreshWindowInTray(hwndItems[i]);
+        }
+    }
+}
+
+void RestoreWindowFromTray(HWND hwnd) {
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
+    if (wcsstr(windowName, NAME) != nullptr) {
+        ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+        return;
+    }
+
+    if (NOTASKBAR) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, (LONG_PTR)hwndBase);
+    }
+    else {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
+    }
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+    RefreshWindowInTray(hwnd);
+}
+
+
+void CloseWindowFromTray(HWND hwnd) {
+    ShowWindow(hwnd, SW_SHOW);
+    PostMessage(hwnd, WM_CLOSE, 0, 0);
+
+    Sleep(180);
+
+    if (!IsWindow(hwnd)) {
+        RemoveWindowFromTray(hwnd);
+    }
+}
+
+
+bool appCheck(HWND hwnd, bool RClick) {
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
 
     if (wcslen(windowName) == 0) {
         return false;
-    }
-
-    if (restore) {
-        if (IsWindowVisible(lParam)) {
-            return false;
-        }
     }
 
     // Excluded window names
@@ -293,7 +319,7 @@ bool appCheck(HWND lParam, bool restore) {
         return false;
     }
 
-    std::wstring processName = getProcessName(lParam);
+    std::wstring processName = getProcessName(hwnd);
     if (processName.empty()) {
         return false;
     }
@@ -323,6 +349,10 @@ bool appCheck(HWND lParam, bool restore) {
             OutputDebugString(debugMsg.c_str());
             return false;
         }
+    }
+
+    if (RClick) {
+        return true;
     }
 
     for (const auto& appName : appNames) {
@@ -368,25 +398,6 @@ BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam) {
     return TRUE;
 }
 
-void RefreshTray() {
-    for (int i = 0; i < MAXTRAYITEMS; i++) {
-        if (hwndItems[i] && IsWindow(hwndItems[i])) {
-            HICON hIcon = GetWindowIcon(hwndItems[i]);
-
-            NOTIFYICONDATA nid;
-            ZeroMemory(&nid, sizeof(nid));
-            nid.cbSize = NOTIFYICONDATA_V2_SIZE;
-            nid.hWnd = hwndMain;
-            nid.uID = (UINT)i;
-            nid.uFlags = NIF_ICON | NIF_TIP;
-            nid.hIcon = hIcon;
-            GetWindowText(hwndItems[i], nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
-
-            Shell_NotifyIcon(NIM_MODIFY, &nid);
-        }
-    }
-}
-
 bool IsTopWindow(HWND hwnd) {
     HWND hwndTopmost = NULL;
     HWND hwnd_ = GetTopWindow(0);
@@ -409,7 +420,7 @@ bool IsTopWindow(HWND hwnd) {
 void MinimizeAllInBackground() {
     std::thread t([]() {
         if (GetTickCount64() < 300000) {
-            Sleep(10000);
+            Sleep(11000);
         }
         MinimizeAll();
         });
@@ -490,7 +501,57 @@ void SaveSettings() {
     }
     file.close();
     LoadSettings();
-    RefreshTray();
+}
+
+void HandleMinimizeCommand(HWND hwnd) {
+    if (appCheck((HWND)hwnd)) {
+        MinimizeWindowToTray((HWND)hwnd);
+    }
+    else {
+        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
+    }
+}
+
+
+void HandleCloseCommand(HWND hwnd) {
+    if (HOOKBOTH && appCheck((HWND)hwnd)) {
+        MinimizeWindowToTray((HWND)hwnd);
+    }
+    else {
+        wchar_t windowName[256];
+        GetWindowText(hwnd, windowName, 256);
+
+        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
+
+        // if (wcslen(windowName) == 0) {
+        //     SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
+        // }
+        // else {
+        //     PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
+        // }
+    }
+}
+
+// Temporarily minimize to Tray
+void HandleMinimizeRightClickCommand(HWND hwnd) {
+    if (appCheck(hwnd, true)) {
+        MinimizeWindowToTray(hwnd);
+    }
+}
+
+// Save app to appNames and settings
+void HandleCloseRightClickCommand(HWND hwnd) {
+    if (!appCheck(hwnd, true)) {
+        return;
+    }
+    std::wstring processName = IsInAppNames(hwnd);
+    if (processName == L"found") {
+        return;
+    }
+    appNames.insert(processName);
+    SaveSettings();
+    MinimizeWindowToTray(hwnd);
+
 }
 
 // This function handles all window messages
@@ -508,9 +569,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_SETCURSOR:
     case WM_MOUSELEAVE:
     {
-        char buf[256];
-        sprintf_s(buf, sizeof(buf), "WndProc: msg=0x%X, HandleImGuiMessages returned=%ld\n", msg, (long)imguiResult);
-        OutputDebugStringA(buf);
+        // char buf[256];
+        // sprintf_s(buf, sizeof(buf), "WndProc: msg=0x%X, HandleImGuiMessages returned=%ld\n", msg, (long)imguiResult);
+        // OutputDebugStringA(buf);
         break;
     }
     default:
@@ -528,7 +589,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     case WM_PAINT:
-        // Render ImGui instead of default paint
         RenderImGuiFrame();
         ValidateRect(hwnd, NULL);
         return 0;
@@ -560,6 +620,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_X:
         HandleCloseCommand((HWND)lParam);
         break;
+    case WM_MIN_R:
+        HandleMinimizeRightClickCommand((HWND)lParam);
+        break;
+    case WM_X_R:
+        HandleCloseRightClickCommand((HWND)lParam);
+        break;
     case WM_REMTRAY:
         RestoreWindowFromTray((HWND)lParam);
         break;
@@ -590,7 +656,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ExecuteMenu();
             break;
         case WM_MOUSEMOVE:
-            RefreshWindowInTray(hwndItems[wParam]);
+            // RefreshWindowInTray(hwndItems[wParam]);
             break;
         }
         break;

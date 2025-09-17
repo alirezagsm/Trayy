@@ -22,13 +22,17 @@ bool ActivateWindow(HWND hwnd) {
     return (GetForegroundWindow() == hwnd);
 }
 
-inline void SendWindowAction(HWND hwnd, bool isMinimize) {
+inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isRightClick = false) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
-        PostMessage(mainWindow,
-            isMinimize ? WM_MIN : WM_X,
-            0,
-            reinterpret_cast<LPARAM>(hwnd));
+        UINT msg = 0;
+        if (isRightClick) {
+            msg = isMinimize ? WM_MIN_R : WM_X_R;
+        }
+        else {
+            msg = isMinimize ? WM_MIN : WM_X;
+        }
+        PostMessage(mainWindow, msg, 0, reinterpret_cast<LPARAM>(hwnd));
     }
 }
 
@@ -102,19 +106,22 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (!info)
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
 
-    if ((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCLBUTTONUP)) {
+
+    // Handle left and right clicks on non-client area
+    if ((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONDOWN) || (wParam == WM_NCRBUTTONUP)) {
         if (info->wHitTestCode != HTCLIENT) {
             const BOOL isHitMin = (info->wHitTestCode == HTMINBUTTON);
             const BOOL isHitX = (info->wHitTestCode == HTCLOSE);
+            const BOOL isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
-            if ((wParam == WM_NCLBUTTONDOWN) && (isHitMin || isHitX)) {
+            if (((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCRBUTTONDOWN)) && (isHitMin || isHitX)) {
                 _hLastHit = info->hwnd;
                 if (ActivateWindow(info->hwnd))
                     return 1;
             }
-            else if ((wParam == WM_NCLBUTTONUP) && (isHitMin || isHitX)) {
+            else if (((wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONUP)) && (isHitMin || isHitX)) {
                 if (info->hwnd == _hLastHit) {
-                    SendWindowAction(info->hwnd, isHitMin);
+                    SendWindowAction(info->hwnd, isHitMin, isRight);
                     _hLastHit = NULL;
                     return 1;
                 }
@@ -169,7 +176,7 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (!info)
         return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
 
-    if (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONUP) {
+    if (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONUP || wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP) {
         POINT pt = info->pt;
         HWND hwnd = WindowFromPoint(pt);
 
@@ -199,7 +206,7 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             // custom scaling for specific apps
             float aspectRatio = 1.64f;
             int offsetY = -12;
-            if (processName.find(L"thunderbird") != std::wstring::npos) {
+            if (processName == L"thunderbird.exe") {
                 aspectRatio = 1.5f;
                 offsetY = -1;
             }
@@ -215,7 +222,8 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             bool isHitMin = isInTitleBar && (relativeX >= minimizeButtonLeft) && (relativeX < maximizeButtonLeft);
 
             // Handle button clicks for special apps
-            if (wParam == WM_LBUTTONDOWN) {
+            bool isRight = (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP);
+            if ((wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN)) {
                 if (isHitX || isHitMin) {
                     _hLastHit = hwnd;
                     if (ActivateWindow(hwnd)) {
@@ -226,9 +234,9 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
                     _hLastHit = NULL;
                 }
             }
-            else if (wParam == WM_LBUTTONUP && hwnd == _hLastHit) {
+            else if ((wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) && hwnd == _hLastHit) {
                 if (isHitX || isHitMin) {
-                    SendWindowAction(hwnd, isHitMin);
+                    SendWindowAction(hwnd, isHitMin, isRight);
                     _hLastHit = NULL;
                     return 1;
                 }

@@ -153,34 +153,6 @@ void ExecuteMenu() {
     DestroyMenu(hMenu);
 }
 
-void HandleMinimizeCommand(HWND hwnd) {
-    if (appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-    else {
-        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
-    }
-}
-
-void HandleCloseCommand(HWND hwnd) {
-    if (HOOKBOTH && appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-    else {
-        wchar_t windowName[256];
-        GetWindowText(hwnd, windowName, 256);
-
-        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
-
-        // if (wcslen(windowName) == 0) {
-        //     SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
-        // }
-        // else {
-        //     PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
-        // }
-    }
-}
-
 
 static std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return {};
@@ -709,7 +681,7 @@ void RenderMainUI() {
     // Save button
     PushBlueButtonStyle();
     if (ImGui::Button("Save Settings", ImVec2(-1, -1))) {
-        SaveSettings(); MinimizeAll(); RefreshTray();
+        SaveSettings(); RefreshTray(); MinimizeWindowToTray(hwndMain);
     }
     PopButtonStyle();
 
