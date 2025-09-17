@@ -296,13 +296,16 @@ void RestoreWindowFromTray(HWND hwnd) {
 
 
 void CloseWindowFromTray(HWND hwnd) {
-    ShowWindow(hwnd, SW_SHOW);
     PostMessage(hwnd, WM_CLOSE, 0, 0);
 
     Sleep(180);
 
     if (!IsWindow(hwnd)) {
         RemoveWindowFromTray(hwnd);
+    }
+    else {
+        ShowWindow(hwnd, SW_HIDE);
+        SetForegroundWindow(hwnd);
     }
 }
 
