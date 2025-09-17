@@ -433,6 +433,9 @@ void LoadSettings() {
     appNames.clear();
     specialAppNames.clear();
     std::wifstream file(SETTINGS_FILE);
+    file.imbue(std::locale(file.getloc(),
+        new std::codecvt_utf8<wchar_t, 0x10ffff, std::generate_header>));
+
     if (!file) {
         std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
         file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
