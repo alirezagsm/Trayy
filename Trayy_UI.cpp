@@ -474,7 +474,6 @@ void RenderMainUI() {
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.60f, 1.0f));
-    ImGui::Text("Application List (click to edit):");
     ImGui::PopStyleColor();
     float listHeight = ImGui::GetContentRegionAvail().y - BUTTON_HEIGHT; // Leave space for buttons
 
@@ -492,13 +491,13 @@ void RenderMainUI() {
         static bool requestFocusForNew = false;
         constexpr size_t EDIT_BUF_SZ = sizeof(editBuffer);
         float spacingWidth = 4.0f;
+        float frameH = ImGui::GetFrameHeight();
+        float btnWidth = (MODIFY_BUTTON_WIDTH > frameH) ? MODIFY_BUTTON_WIDTH : frameH;
+        float availWidth = ImGui::GetContentRegionAvail().x;
 
         // render each row
         auto renderRow = [&](int i) -> bool {
             ImGui::PushID(i);
-            float availWidth = ImGui::GetContentRegionAvail().x;
-            float frameH = ImGui::GetFrameHeight();
-            float btnWidth = (MODIFY_BUTTON_WIDTH > frameH) ? MODIFY_BUTTON_WIDTH : frameH;
             if (editingIndex == i) {
                 // selected
                 float textWidthSelected = availWidth - btnWidth - 2 * spacingWidth;
@@ -621,23 +620,24 @@ void RenderMainUI() {
 
         if (addingNew) {
             ImGui::PushID("new_item");
-            float availWidth = ImGui::GetContentRegionAvail().x;
-            float frameH_new = ImGui::GetFrameHeight();
-            float btnWidth_new = (MODIFY_BUTTON_WIDTH > frameH_new) ? MODIFY_BUTTON_WIDTH : frameH_new;
-            float textWidth_new = availWidth - btnWidth_new - spacingWidth;
-            ImGui::SetNextItemWidth(textWidth_new);
+            float textWidth = availWidth - btnWidth - 2 * spacingWidth;
+            ImGui::SetNextItemWidth(textWidth);
+
             if (requestFocusForNew) ImGui::SetKeyboardFocusHere();
+
             bool enterPressed = ImGui::InputText("##new", editBuffer, EDIT_BUF_SZ,
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways,
                 InputText_SetCursorToEndCallback, &requestFocusForNew);
+
             ImGui::SameLine(0, spacingWidth);
             PushGreenButtonStyle();
-            if (ImGui::Button("+", ImVec2(btnWidth_new, btnWidth_new))) {
+            if (ImGui::Button("+", ImVec2(btnWidth, btnWidth))) {
                 InsertAppFromBuffer(editBuffer);
                 editBuffer[0] = '\0';
                 addingNew = false;
             }
             PopButtonStyle();
+
             if (enterPressed) {
                 InsertAppFromBuffer(editBuffer);
                 editBuffer[0] = '\0';
@@ -654,7 +654,9 @@ void RenderMainUI() {
             if (ImGui::Button("+", ImVec2(MODIFY_BUTTON_WIDTH, 0))) {
                 addingNew = true; editingIndex = -1; editBuffer[0] = '\0'; requestFocusForNew = true;
             }
-            PopButtonStyle(); ImGui::SameLine(); ImGui::Text("Add new application");
+            PopButtonStyle();
+            ImGui::SameLine();
+            ImGui::Text("Add new application");
         }
         ImGui::Dummy(ImVec2(0, MODIFY_BUTTON_WIDTH));
     }
