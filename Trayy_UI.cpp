@@ -453,10 +453,8 @@ void RenderImGuiFrame() {
 }
 
 void RenderMainUI() {
-    // Set window to fill the client area
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
-
     if (!ImGui::Begin("Trayy Settings", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
@@ -464,7 +462,6 @@ void RenderMainUI() {
         return;
     }
 
-    // Top area
     if (updateAvailable) {
         PushGreenButtonStyle();
         if (ImGui::Button("Update Available", ImVec2(-1, 0))) HandleUpdateButtonClick(hwndMain);
@@ -476,13 +473,11 @@ void RenderMainUI() {
     ImGui::Checkbox("Do not show on Taskbar", &NOTASKBAR);
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
 
-    // Application list area
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.60f, 1.0f));
     ImGui::Text("Application List (click to edit):");
     ImGui::PopStyleColor();
-    float listHeight = ImGui::GetContentRegionAvail().y - BUTTON_HEIGHT; // Leave space for save button
+    float listHeight = ImGui::GetContentRegionAvail().y - BUTTON_HEIGHT; // Leave space for buttons
 
-    // Take a snapshot of the cache under lock to keep UI rendering lock-free
     std::vector<std::pair<std::wstring, std::string>> localCache;
     {
         std::lock_guard<std::mutex> lk(g_appCacheMutex);
@@ -490,45 +485,31 @@ void RenderMainUI() {
     }
 
     if (ImGui::BeginChild("AppList", ImVec2(-1, listHeight), true)) {
-        // UI state (persist across frames)
         static int editingIndex = -1;
         static char editBuffer[256] = "";
         static bool addingNew = false;
         static bool requestFocusForEdit = false;
         static bool requestFocusForNew = false;
         constexpr size_t EDIT_BUF_SZ = sizeof(editBuffer);
+        float spacingWidth = 4.0f;
 
-        // render a single row
+        // render each row
         auto renderRow = [&](int i) -> bool {
             ImGui::PushID(i);
-
-            float buttonWidth = MODIFY_BUTTON_WIDTH;
             float availWidth = ImGui::GetContentRegionAvail().x;
             float frameH = ImGui::GetFrameHeight();
-            float btnSize = (buttonWidth > frameH) ? buttonWidth : frameH;
-            // Reserve same buttons block width as used later
-            float spacingButtonsLocal = 4.0f;
-            // right-side buttons are toggle + delete (always present)
-            float rightButtonsWidth = btnSize * 2 + spacingButtonsLocal + 8.0f; // toggle + delete + spacing + margin
-            float confirmWidth = btnSize; // confirm placed immediately after input when editing
-            float totalButtonsWidthLocal = rightButtonsWidth; // used for right-aligning
-            // capture content region's left X so we can right-align buttons relative to the content area
-            float contentStartX = ImGui::GetCursorScreenPos().x;
-
-            // Display either editable text box or selectable label
+            float btnWidth = (MODIFY_BUTTON_WIDTH > frameH) ? MODIFY_BUTTON_WIDTH : frameH;
             if (editingIndex == i) {
-                float spacing = ImGui::GetStyle().ItemSpacing.x;
-                // reserve space for right-side buttons AND the inline confirm button
-                ImGui::SetNextItemWidth(availWidth - totalButtonsWidthLocal - confirmWidth - spacing - 4 - spacingButtonsLocal);
+                // selected
+                float textWidthSelected = availWidth - btnWidth - 2 * spacingWidth;
+                ImGui::SetNextItemWidth(textWidthSelected);
                 if (requestFocusForEdit) { ImGui::SetKeyboardFocusHere(); }
                 bool enterPressed = ImGui::InputText("##edit", editBuffer, EDIT_BUF_SZ,
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways,
                     InputText_SetCursorToEndCallback, &requestFocusForEdit);
-
-                // Inline confirm button immediately after the input
-                ImGui::SameLine();
+                ImGui::SameLine(0, spacingWidth);
                 PushGreenButtonStyle();
-                if (ImGui::Button("+", ImVec2(confirmWidth, btnSize))) {
+                if (ImGui::Button("+", ImVec2(btnWidth, btnWidth))) {
                     if (std::strlen(editBuffer) > 0) {
                         std::wstring newName = Utf8ToWide(editBuffer);
                         const std::wstring& oldName = localCache[i].first;
@@ -538,8 +519,7 @@ void RenderMainUI() {
                     editingIndex = -1;
                 }
                 PopButtonStyle();
-
-                if (enterPressed || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered())) {
+                if (enterPressed) {
                     if (std::strlen(editBuffer) > 0) {
                         std::wstring newName = Utf8ToWide(editBuffer);
                         const std::wstring& oldName = localCache[i].first;
@@ -547,121 +527,126 @@ void RenderMainUI() {
                     }
                     editingIndex = -1;
                 }
-
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) editingIndex = -1;
             }
             else {
-                if (ImGui::Selectable(localCache[i].second.c_str(), false, 0, ImVec2(availWidth - totalButtonsWidthLocal - 8, 0))) {
+                // unselected
+                ImVec2 row_start_pos = ImGui::GetCursorScreenPos();
+
+                float textWidth = availWidth - 2 * btnWidth - 3 * spacingWidth;
+                ImVec2 itemSize = ImVec2(textWidth, frameH);
+                const char* label = localCache[i].second.c_str();
+
+                // Use an InvisibleButton
+                bool clicked = ImGui::InvisibleButton(label, itemSize);
+                ImVec2 text_area_min = ImGui::GetItemRectMin();
+                ImVec2 text_area_max = ImGui::GetItemRectMax();
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+                ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
+                ImVec2 text_pos = ImVec2(
+                    text_area_min.x + ImGui::GetStyle().FramePadding.x,
+                    text_area_min.y + (itemSize.y - label_size.y) * 0.5f
+                );
+                draw_list->AddText(text_pos, ImGui::GetColorU32(ImGuiCol_Text), label);
+
+                if (clicked) {
                     editingIndex = i;
                     addingNew = false;
                     requestFocusForEdit = true;
                     std::string nameWithoutSpecial = localCache[i].second;
-                    // Remove trailing " *" if present
                     auto pos = nameWithoutSpecial.rfind(" *");
                     if (pos != std::string::npos && pos + 2 == nameWithoutSpecial.size())
                         nameWithoutSpecial.resize(pos);
                     strncpy_s(editBuffer, nameWithoutSpecial.c_str(), EDIT_BUF_SZ - 1);
                 }
-            }
 
-            // Prepare buttons region aligned to the right of the content region (toggle + delete)
-            ImVec2 itemMin = ImGui::GetItemRectMin();
-            ImVec2 itemMax = ImGui::GetItemRectMax();
-            float itemCenterY = (itemMin.y + itemMax.y) * 0.5f;
-            // compute start X relative to content start so buttons are flush-right inside the child
-            float startX = contentStartX + (availWidth - rightButtonsWidth);
-            ImGui::SetCursorScreenPos(ImVec2(startX, itemCenterY - btnSize * 0.5f));
+                // Draw the buttons next to the text area
+                ImGui::SameLine(0, spacingWidth);
+                bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
+                if (isSpecial) {
+                    PushDarkBlueButtonStyle();
+                    if (ImGui::Button("G", ImVec2(btnWidth, btnWidth))) {
+                        specialAppNames.erase(localCache[i].first);
+                        UpdateSpecialAppsList(specialAppNames);
+                        MarkAppListDirty();
+                    }
+                    PopButtonStyle();
+                }
+                else {
+                    PushBlueButtonStyle();
+                    if (ImGui::Button("N", ImVec2(btnWidth, btnWidth))) {
+                        specialAppNames.insert(localCache[i].first);
+                        UpdateSpecialAppsList(specialAppNames);
+                        MarkAppListDirty();
+                    }
+                    PopButtonStyle();
+                }
 
-            // Hover highlight for the row when mouse is over the buttons block
-            ImVec2 btnRectMin = ImGui::GetCursorScreenPos();
-            ImVec2 btnRectMax = ImVec2(btnRectMin.x + rightButtonsWidth, btnRectMin.y + btnSize);
-            if (ImGui::IsMouseHoveringRect(btnRectMin, btnRectMax, true)) {
-                ImVec4 hovCol = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
-                hovCol.w *= 0.8f;
-                ImGui::GetWindowDrawList()->AddRectFilled(itemMin, itemMax, ImGui::GetColorU32(hovCol), 4.0f);
-            }
+                ImGui::SameLine(0, spacingWidth);
+                PushRedButtonStyle();
+                bool deleteClicked = ImGui::Button("X", ImVec2(btnWidth, btnWidth));
 
-            // Toggle button (same size as delete)
-            ImGui::PushID("toggle");
-            bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
-            if (isSpecial) {
-                PushDarkBlueButtonStyle();
-                if (ImGui::Button("G", ImVec2(btnSize, btnSize))) {
-                    specialAppNames.erase(localCache[i].first);
+                // Define hover zone
+                ImVec2 row_end_pos = ImGui::GetItemRectMax();
+                ImVec2 full_row_min = row_start_pos;
+                ImVec2 full_row_max = ImVec2(row_end_pos.x, row_start_pos.y + frameH);
+                PopButtonStyle();
+
+
+                // Highlight
+                if (ImGui::IsMouseHoveringRect(full_row_min, full_row_max)) {
+                    draw_list->AddRect(text_area_min, text_area_max, ImGui::GetColorU32(ImGuiCol_HeaderHovered), ImGui::GetStyle().FrameRounding);
+                }
+
+                if (deleteClicked) {
+                    const std::wstring& appToDelete = localCache[i].first;
+                    appNames.erase(appToDelete);
+                    specialAppNames.erase(appToDelete);
                     UpdateSpecialAppsList(specialAppNames);
                     MarkAppListDirty();
+                    editingIndex = -1;
+                    ImGui::PopID();
+                    return true;
                 }
-                PopButtonStyle();
             }
-            else {
-                PushBlueButtonStyle();
-                if (ImGui::Button("N", ImVec2(btnSize, btnSize))) {
-                    specialAppNames.insert(localCache[i].first);
-                    UpdateSpecialAppsList(specialAppNames);
-                    MarkAppListDirty();
-                }
-                PopButtonStyle();
-            }
-            ImGui::PopID();
 
-            ImGui::SameLine(0, spacingButtonsLocal);
-
-            // No confirm button in the right block; confirm is inline when editing.
-            ImGui::SameLine(0, spacingButtonsLocal);
-
-            // Delete / Cancel button (same size)
-            if (editingIndex == i) PushBlueButtonStyle(); else PushRedButtonStyle();
-            if (ImGui::Button("X", ImVec2(btnSize, btnSize))) {
-                const std::wstring& appToDelete = localCache[i].first;
-                appNames.erase(appToDelete);
-                specialAppNames.erase(appToDelete);
-                UpdateSpecialAppsList(specialAppNames);
-                MarkAppListDirty();
-                if (editingIndex == i) editingIndex = -1;
-                addingNew = false;
-                PopButtonStyle();
-                ImGui::PopID();
-                return true;
-            }
-            PopButtonStyle();
             ImGui::PopID();
             return false;
             };
 
-        // Render all rows
         for (int i = 0; i < (int)localCache.size(); ++i) {
             if (renderRow(i)) break;
         }
 
-        // Add new item section
         if (addingNew) {
             ImGui::PushID("new_item");
             float availWidth = ImGui::GetContentRegionAvail().x;
             float frameH_new = ImGui::GetFrameHeight();
-            float btnSize_new = (MODIFY_BUTTON_WIDTH > frameH_new) ? MODIFY_BUTTON_WIDTH : frameH_new;
-            float spacing_new = ImGui::GetStyle().ItemSpacing.x;
-            ImGui::SetNextItemWidth(availWidth - (btnSize_new * 2) - spacing_new - 8);
-
+            float btnWidth_new = (MODIFY_BUTTON_WIDTH > frameH_new) ? MODIFY_BUTTON_WIDTH : frameH_new;
+            float textWidth_new = availWidth - btnWidth_new - spacingWidth;
+            ImGui::SetNextItemWidth(textWidth_new);
             if (requestFocusForNew) ImGui::SetKeyboardFocusHere();
             bool enterPressed = ImGui::InputText("##new", editBuffer, EDIT_BUF_SZ,
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways,
                 InputText_SetCursorToEndCallback, &requestFocusForNew);
-
-            if (enterPressed || (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered())) {
+            ImGui::SameLine(0, spacingWidth);
+            PushGreenButtonStyle();
+            if (ImGui::Button("+", ImVec2(btnWidth_new, btnWidth_new))) {
                 InsertAppFromBuffer(editBuffer);
                 editBuffer[0] = '\0';
                 addingNew = false;
             }
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { addingNew = false; editBuffer[0] = '\0'; }
-
-            ImGui::SameLine();
-            PushGreenButtonStyle();
-            if (ImGui::Button("+", ImVec2(btnSize_new, btnSize_new))) { InsertAppFromBuffer(editBuffer); editBuffer[0] = '\0'; addingNew = false; }
             PopButtonStyle();
-
-            ImGui::SameLine(); PushBlueButtonStyle();
-            if (ImGui::Button("X", ImVec2(btnSize_new, btnSize_new))) { addingNew = false; editBuffer[0] = '\0'; }
-            PopButtonStyle();
+            if (enterPressed) {
+                InsertAppFromBuffer(editBuffer);
+                editBuffer[0] = '\0';
+                addingNew = false;
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                addingNew = false;
+                editBuffer[0] = '\0';
+            }
             ImGui::PopID();
         }
         else {
@@ -671,14 +656,12 @@ void RenderMainUI() {
             }
             PopButtonStyle(); ImGui::SameLine(); ImGui::Text("Add new application");
         }
-
         ImGui::Dummy(ImVec2(0, MODIFY_BUTTON_WIDTH));
     }
     ImGui::EndChild();
 
     ImGui::Spacing();
 
-    // Save button
     PushBlueButtonStyle();
     if (ImGui::Button("Save Settings", ImVec2(-1, -1))) {
         SaveSettings();
@@ -687,7 +670,6 @@ void RenderMainUI() {
         ReinstateTaskbarState();
     }
     PopButtonStyle();
-
     ImGui::End();
 }
 
