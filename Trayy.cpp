@@ -322,7 +322,11 @@ void RestoreWindowFromTray(std::wstring appName) {
             if (UseWindowName.find(processName) != UseWindowName.end()) {
                 processName = windowName;
             }
-
+            std::wstring nameWithoutExt = processName;
+            size_t extPos = nameWithoutExt.rfind(L'.');
+            if (extPos != std::wstring::npos) {
+                processName = nameWithoutExt.substr(0, extPos);
+            }
             if (processName == appName) {
                 RestoreWindowFromTray(hwndItems[i]);
                 return;
@@ -330,7 +334,6 @@ void RestoreWindowFromTray(std::wstring appName) {
         }
     }
 }
-
 
 void CloseWindowFromTray(HWND hwnd) {
     PostMessage(hwnd, WM_CLOSE, 0, 0);
