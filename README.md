@@ -1,7 +1,9 @@
-<div align="center">
-  <img src="logo.ico" alt="Trayy logo" width="80" />
-  <h1>Trayy</h1>
-</div>
+<h1 align="center">
+    <img src="logo.ico" alt="Trayy logo" width="80"/>
+    <div>
+    Trayy
+    </div>
+</h1>
 
 <p align="center">
 Ever wished you could tell some apps to chill in the system tray? </br>Say hello to Trayy, your desktop's new bouncer!
