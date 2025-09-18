@@ -10,7 +10,7 @@
 #define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
-#define VERSION L"v1.8"
+#define VERSION L"v2.0"
 #define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
@@ -75,6 +75,8 @@ void MinimizeAll();
 void RefreshTray();
 void SaveSettings();
 void ReinstateTaskbarState();
+void RestoreWindowFromTray(HWND hwnd);
+void RestoreWindowFromTray(std::wstring appName);
 
 // Trayy_UI.cpp
 void InitializeUI(HINSTANCE hInstance);

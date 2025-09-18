@@ -313,6 +313,24 @@ void RestoreWindowFromTray(HWND hwnd) {
     RefreshWindowInTray(hwnd);
 }
 
+void RestoreWindowFromTray(std::wstring appName) {
+    for (int i = 0; i < MAXTRAYITEMS; i++) {
+        if (hwndItems[i] != NULL && hwndItems[i] != hwndMain) {
+            std::wstring processName = getProcessName(hwndItems[i]);
+            wchar_t windowName[256];
+            GetWindowText(hwndItems[i], windowName, 256);
+            if (UseWindowName.find(processName) != UseWindowName.end()) {
+                processName = windowName;
+            }
+
+            if (processName == appName) {
+                RestoreWindowFromTray(hwndItems[i]);
+                return;
+            }
+        }
+    }
+}
+
 
 void CloseWindowFromTray(HWND hwnd) {
     PostMessage(hwnd, WM_CLOSE, 0, 0);
@@ -559,14 +577,14 @@ void HandleCloseCommand(HWND hwnd) {
     }
 }
 
-// Temporarily minimize to Tray
+// Quick action: temporarily minimize to Tray
 void HandleMinimizeRightClickCommand(HWND hwnd) {
     if (appCheck(hwnd, true)) {
         MinimizeWindowToTray(hwnd);
     }
 }
 
-// Save app to appNames and settings
+// Quick action: save app to appNames and settings
 void HandleCloseRightClickCommand(HWND hwnd) {
     if (!appCheck(hwnd, true)) {
         return;

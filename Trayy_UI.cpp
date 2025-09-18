@@ -478,8 +478,9 @@ void RenderMainUI() {
         ImGui::Spacing();
     }
 
-    ImGui::Checkbox("Send to Tray also when Closed", &HOOKBOTH);
     ImGui::Checkbox("Do not show on Taskbar", &NOTASKBAR);
+    ImGui::Checkbox("Send to Tray also when Closed", &HOOKBOTH);
+
     ImGui::Spacing();
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.60f, 0.60f, 1.0f));
@@ -609,6 +610,7 @@ void RenderMainUI() {
 
                 if (deleteClicked) {
                     const std::wstring& appToDelete = localCache[i].first;
+                    RestoreWindowFromTray(appToDelete);
                     appNames.erase(appToDelete);
                     specialAppNames.erase(appToDelete);
                     UpdateSpecialAppsList(specialAppNames);
