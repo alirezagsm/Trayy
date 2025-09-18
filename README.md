@@ -1,7 +1,9 @@
-<div align="center">
-  <img src="logo.ico" alt="Trayy logo" width="80" />
-  <h1>Trayy</h1>
-</div>
+<h1 align="center">
+    <img src="logo.ico" alt="Trayy logo" width="80"/>
+    <div>
+    Trayy
+    </div>
+</h1>
 
 <p align="center">
 Ever wished you could tell some apps to chill in the system tray? </br>Say hello to Trayy, your desktop's new bouncer!
@@ -46,6 +48,6 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 
 This project is inspired by RBTray.
 
-If Trayy made your workflow smoother, please consider supporting its development! ☕✨
+If Trayy made your workflow smoother, consider supporting its development! ☕✨
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q21EOKMX)
