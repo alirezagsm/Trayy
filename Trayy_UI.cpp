@@ -24,16 +24,15 @@ static constexpr const char* DEFAULT_FONT_PATH = "C:\\Windows\\Fonts\\segoeui.tt
 static inline int FONT_SIZE = 18;
 static constexpr int IMGUI_TIMER_MS = 16; // ~60 FPS
 
-
 float GetWindowDpiScale(HWND hwnd) {
     UINT dpiX = 96, dpiY = 96;
     HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
     if (hMonitor) {
     }
     GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    if (dpiY == 0) dpiY = 96;
     return dpiY / 96.0f;
 }
-
 
 // DirectX11 data
 static ID3D11Device* g_pd3dDevice = nullptr;
@@ -166,7 +165,6 @@ void ExecuteMenu() {
     PostMessage(hwndMain, WM_USER, 0, 0);
     DestroyMenu(hMenu);
 }
-
 
 static std::string WideToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return {};
@@ -725,6 +723,6 @@ LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         break;
     }
-
+    
     return -1;
 }

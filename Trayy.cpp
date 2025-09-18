@@ -240,7 +240,6 @@ std::wstring IsInAppNames(HWND hwnd) {
     return processName;
 }
 
-
 void RefreshWindowInTray(HWND hwnd) {
     int i = FindInTray(hwnd);
     if (i == -1) {
@@ -348,7 +347,6 @@ void CloseWindowFromTray(HWND hwnd) {
         SetForegroundWindow(hwnd);
     }
 }
-
 
 bool appCheck(HWND hwnd, bool RClick) {
     wchar_t windowName[256];
@@ -559,7 +557,6 @@ void HandleMinimizeCommand(HWND hwnd) {
         SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
     }
 }
-
 
 void HandleCloseCommand(HWND hwnd) {
     if (HOOKBOTH && appCheck((HWND)hwnd)) {

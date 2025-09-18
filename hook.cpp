@@ -164,6 +164,7 @@ float GetWindowDpiScale(HWND hwnd) {
     if (hMonitor) {
         GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
     }
+    if (dpiY == 0) dpiY = 96;
     return dpiY / 96.0f;
 }
 
