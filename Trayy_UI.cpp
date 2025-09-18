@@ -12,7 +12,6 @@
 #include <thread>
 #include <Shellscalingapi.h>
 
-
 static inline float DPI_SCALE;
 static inline int WINDOW_WIDTH = 333;
 static inline int WINDOW_HEIGHT = 500;
@@ -23,6 +22,8 @@ static constexpr int BASE_WINDOW_WIDTH = 300;
 static constexpr int BASE_WINDOW_HEIGHT = 500;
 static constexpr const char* DEFAULT_FONT_PATH = "C:\\Windows\\Fonts\\segoeui.ttf";
 static inline int FONT_SIZE = 18;
+static constexpr int IMGUI_TIMER_MS = 16; // ~60 FPS
+
 
 float GetWindowDpiScale(HWND hwnd) {
     UINT dpiX = 96, dpiY = 96;
@@ -113,13 +114,26 @@ void InitializeUI(HINSTANCE hInstance) {
     }
 }
 
+static void StartImGuiTimer() {
+    if (hwndMain) {
+        SetTimer(hwndMain, IMGUI_TIMER_ID, IMGUI_TIMER_MS, NULL);
+    }
+}
+static void StopImGuiTimer() {
+    if (hwndMain) {
+        KillTimer(hwndMain, IMGUI_TIMER_ID);
+    }
+}
+
 void ShowAppInterface(bool minimizeToTray) {
     if (minimizeToTray) {
         MinimizeWindowToTray(hwndMain);
+        StopImGuiTimer();
     }
     else {
         ShowWindow(hwndMain, SW_SHOW);
         SetForegroundWindow(hwndMain);
+        StartImGuiTimer();
     }
 }
 
@@ -379,9 +393,7 @@ bool InitializeImGui(HWND hwnd) {
     MarkAppListDirty(); // Initial cache update
 
     // Set idle refresh timer
-    if (hwndMain) {
-        SetTimer(hwndMain, IMGUI_TIMER_ID, IMGUI_TIMER_MS, NULL);
-    }
+    StartImGuiTimer();
 
     return true;
 }
@@ -703,6 +715,10 @@ LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_ResizeHeight = (UINT)HIWORD(lParam);
             return 0;
         }
+        break;
+    case WM_SHOWWINDOW:
+        // wParam == TRUE -> shown; FALSE -> hidden
+        if (wParam) StartImGuiTimer(); else StopImGuiTimer();
         break;
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
