@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <codecvt>
 #include <locale>
+#include <sstream>
 
 // Global variables
 UINT WM_TASKBAR_CREATED;
@@ -27,7 +28,7 @@ bool NOTASKBAR = false;
 bool updateAvailable = false;
 
 std::unordered_set<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
-std::unordered_set<std::wstring> ExcludedProcesses = { L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
+std::unordered_set<std::wstring> ExcludedProcesses = { L"Chrom Legacy Window", L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
 std::unordered_set<std::wstring> UseWindowName = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
 
 // Shared memory variables
@@ -198,6 +199,70 @@ std::wstring getProcessName(HWND hwnd) {
     return std::wstring(processName);
 }
 
+bool MatchesAppName(HWND hwnd) {
+    std::wstring originalProcessName = getProcessName(hwnd);
+    std::wstring processName = originalProcessName;
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
+    std::wstring windowNameStr(windowName);
+
+    bool switchedProcessNametoWindowName = false;
+    if (UseWindowName.find(originalProcessName) != UseWindowName.end()) {
+        processName = windowNameStr;
+        switchedProcessNametoWindowName = true;
+    }
+
+    for (const auto& appName : appNames) {
+        if (appName.empty()) {
+            continue;
+        }
+
+        std::wistringstream iss(appName);
+        std::wstring word;
+        std::vector<std::wstring> words;
+
+        while (iss >> word) {
+            words.push_back(word);
+        }
+
+        if (words.empty()) {
+            continue;
+        }
+
+        bool firstWordHasExtension = words[0].find(L'.') != std::wstring::npos;
+        if (firstWordHasExtension) {
+            if (switchedProcessNametoWindowName) {
+                continue;
+            }
+
+            std::wstring processPart = words[0];
+            std::wstring titlePart = words.size() > 1 ? appName.substr(appName.find(L' ') + 1) : L"";
+
+            if (originalProcessName == processPart) {
+                if (titlePart.empty()) {
+                    return true;
+                }
+                if (windowNameStr.find(titlePart) != std::wstring::npos) {
+                    return true;
+                }
+            }
+        }
+        else {
+            if (switchedProcessNametoWindowName) {
+                if (processName.find(appName) != std::wstring::npos) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if (originalProcessName == NAME L".exe" && windowNameStr == NAME) {
+        return true;
+    }
+
+    return false;
+}
+
 bool RemoveWindowFromTray(HWND hwnd) {
     int i = FindInTray(hwnd);
     if (i == -1) {
@@ -215,54 +280,31 @@ bool RemoveWindowFromTray(HWND hwnd) {
     return true;
 }
 
-std::wstring IsInAppNames(HWND hwnd) {
-    std::wstring processName = getProcessName(hwnd);
-    wchar_t windowName[256];
-    GetWindowText(hwnd, windowName, 256);
-    if (UseWindowName.find(processName) != UseWindowName.end()) {
-        processName = windowName;
-    }
-
-    bool found = false;
-    for (const auto& appName : appNames) {
-        if (!appName.empty() && processName.find(appName) != std::wstring::npos) {
-            found = true;
-            break;
-        }
-    }
-    if (found) {
-        return L"found";
-    }
-    size_t extPos = processName.rfind(L'.');
-    if (extPos != std::wstring::npos) {
-        processName = processName.substr(0, extPos);
-    }
-    return processName;
-}
-
 void RefreshWindowInTray(HWND hwnd) {
     int i = FindInTray(hwnd);
     if (i == -1) {
         return;
     }
+
     if (!IsWindow(hwnd)) {
         RemoveWindowFromTray(hwnd);
+        return;
     }
-    else {
-        if (IsInAppNames(hwnd) != L"found") {
-            RemoveWindowFromTray(hwnd);
-            return;
-        }
 
-        NOTIFYICONDATA nid;
-        ZeroMemory(&nid, sizeof(nid));
-        nid.cbSize = NOTIFYICONDATA_V2_SIZE;
-        nid.hWnd = hwnd;
-        nid.uID = (UINT)i;
-        nid.uFlags = NIF_TIP;
-        GetWindowText(hwnd, nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
+    if (!MatchesAppName(hwnd) && IsWindowVisible(hwnd)) {
+        RemoveWindowFromTray(hwnd);
+        return;
     }
+
+    NOTIFYICONDATA nid;
+    ZeroMemory(&nid, sizeof(nid));
+    nid.cbSize = NOTIFYICONDATA_V2_SIZE;
+    nid.hWnd = hwndMain;
+    nid.uID = (UINT)i;
+    nid.uFlags = NIF_TIP | NIF_ICON;
+    GetWindowText(hwnd, nid.szTip, sizeof(nid.szTip) / sizeof(nid.szTip[0]));
+    nid.hIcon = GetWindowIcon(hwnd);
+    Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
 void ReinstateTaskbarState() {
@@ -295,8 +337,43 @@ void RefreshTray() {
 void RestoreWindowFromTray(HWND hwnd) {
     wchar_t windowName[256];
     GetWindowText(hwnd, windowName, 256);
-    if (wcsstr(windowName, NAME) != nullptr) {
+    if (hwnd == hwndMain) {
+        // Mirror the exact positioning logic from CreateMainWindow()
+        RECT rect;
+        HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
+        if (!taskbar) {
+            // Fallback to primary monitor screen if taskbar isn't found
+            rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+        }
+        else {
+            GetWindowRect(taskbar, &rect);
+        }
+
+        // Get current window dimensions
+        RECT windowRect;
+        GetWindowRect(hwnd, &windowRect);
+        int windowWidth = windowRect.right - windowRect.left;
+        int windowHeight = windowRect.bottom - windowRect.top;
+
+        // Calculate position exactly as CreateMainWindow does
+        int x = rect.right - windowWidth - DESKTOP_PADDING;
+        int y;
+        if (rect.top == 0) {
+            // Taskbar at top
+            y = rect.bottom + DESKTOP_PADDING;
+        }
+        else {
+            // Taskbar at bottom
+            y = rect.top - windowHeight - DESKTOP_PADDING;
+        }
+
+        // Use ShowWindow to ensure WM_SHOWWINDOW is sent and timer is started
         ShowWindow(hwnd, SW_SHOW);
+        // Explicitly position and show the window
+        SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0,
+            SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
         SetForegroundWindow(hwnd);
         return;
     }
@@ -309,7 +386,10 @@ void RestoreWindowFromTray(HWND hwnd) {
     }
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
-    RefreshWindowInTray(hwnd);
+
+    if (IsWindow(hwnd)) {
+        RefreshWindowInTray(hwnd);
+    }
 }
 
 void RestoreWindowFromTray(std::wstring appName) {
@@ -372,41 +452,15 @@ bool appCheck(HWND hwnd, bool RClick) {
         return false;
     }
 
-    // Change to window name if needed
-    bool switchedProcessName = false;
-    if (UseWindowName.find(processName) != UseWindowName.end()) {
-        processName = windowName;
-        switchedProcessName = true;
-    }
-
-    // Multi-window support
-    if (!switchedProcessName) {} {
-        size_t prefixLen = std::min<size_t>(4, processName.size());
-        std::wstring prefix = processName.substr(0, prefixLen);
-        std::wstring windowLower = windowNameStr;
-        std::wstring prefixLower = prefix;
-        std::transform(windowLower.begin(), windowLower.end(), windowLower.begin(), ::towlower);
-        std::transform(prefixLower.begin(), prefixLower.end(), prefixLower.begin(), ::towlower);
-        if (windowLower.find(prefixLower) == std::wstring::npos) {
-            std::wstring debugMsg = L"Skipping " + processName + L" with window name " + windowNameStr + L"\n";
-            OutputDebugString(debugMsg.c_str());
-            return false;
-        }
+    if (hwnd == hwndMain) {
+        return false;
     }
 
     if (RClick) {
         return true;
     }
 
-    for (const auto& appName : appNames) {
-        if (!appName.empty() && processName.find(appName) != std::wstring::npos) {
-            return true;
-        }
-    }
-    if (processName == NAME L".exe" && wcscmp(windowName, NAME) == 0) {
-        return true;
-    }
-    return false;
+    return MatchesAppName(hwnd);
 }
 
 void MinimizeAll() {
@@ -589,14 +643,19 @@ void HandleCloseRightClickCommand(HWND hwnd) {
     if (!appCheck(hwnd, true)) {
         return;
     }
-    std::wstring processName = IsInAppNames(hwnd);
-    if (processName == L"found") {
+    if (MatchesAppName(hwnd)) {
         return;
     }
+
+    std::wstring processName = getProcessName(hwnd);
+    size_t extPos = processName.rfind(L'.');
+    if (extPos != std::wstring::npos) {
+        processName = processName.substr(0, extPos);
+    }
+
     appNames.insert(processName);
     SaveSettings();
     MinimizeWindowToTray(hwnd);
-
 }
 
 // This function handles all window messages
@@ -708,8 +767,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     case WM_SYSCOMMAND:
     {
-        if (wParam == SC_CLOSE) {
-            SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
+        if (wParam == SC_CLOSE && hwnd == hwndMain) {
+            MinimizeWindowToTray(hwndMain);
+            return 0;
         }
         break;
     }
@@ -786,7 +846,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
 
 
     InitializeUI(hInstance);
-    ShowAppInterface(true);
 
     MinimizeAllInBackground();
     RefreshTray();
