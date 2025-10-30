@@ -81,18 +81,16 @@ bool IsSpecialApp(const std::wstring& processName) {
     if (!AccessSharedMemory() || !_pSharedData)
         return false;
 
-    std::wstring nameWithoutExt = processName;
-
-    size_t extPos = nameWithoutExt.rfind(L'.');
-    if (extPos != std::wstring::npos) {
-        nameWithoutExt = nameWithoutExt.substr(0, extPos);
-    }
-
     for (int i = 0; i < _pSharedData->count; i++) {
-        if (_wcsicmp(_pSharedData->specialApps[i], nameWithoutExt.c_str()) == 0) {
+        std::wstring specialApp = _pSharedData->specialApps[i];
+        specialApp = specialApp.substr(0, specialApp.find(L' '));
+        if (_wcsicmp(specialApp.c_str(), processName.c_str()) == 0) {
             return true;
         }
     }
+
+    if (processName == L"firefox.exe") // default to Graphical mode for Firefox
+        return true;
 
     return false;
 }
