@@ -57,6 +57,7 @@ extern std::unordered_set<std::wstring> specialAppNames;
 extern bool HOOKBOTH;
 extern bool NOTASKBAR;
 extern bool updateAvailable;
+extern int DESKTOP_PADDING;
 
 // Hook-related functions
 BOOL DLLIMPORT RegisterHook(HMODULE);
