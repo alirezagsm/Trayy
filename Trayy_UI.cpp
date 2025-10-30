@@ -12,10 +12,10 @@
 #include <thread>
 #include <Shellscalingapi.h>
 
-static inline float DPI_SCALE;
+int DESKTOP_PADDING = 15;
+static inline float DPI_SCALE = 1.0f;
 static inline int WINDOW_WIDTH = 333;
 static inline int WINDOW_HEIGHT = 500;
-static inline int DESKTOP_PADDING = 15;
 static inline int BUTTON_HEIGHT = 45;
 static inline int MODIFY_BUTTON_WIDTH = 22;
 static constexpr int BASE_WINDOW_WIDTH = 300;
@@ -54,7 +54,13 @@ static bool g_appListDirty = true; // Flag to update cache when needed
 HWND CreateMainWindow(HINSTANCE hInstance) {
     RECT rect;
     HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
-    GetWindowRect(taskbar, &rect);
+    if (!taskbar) {
+        // Fallback to centering on screen if taskbar isn't found
+        rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    }
+    else {
+        GetWindowRect(taskbar, &rect);
+    }
     int x = rect.right - WINDOW_WIDTH - DESKTOP_PADDING;
     int y;
     if (rect.top == 0) {
@@ -82,16 +88,27 @@ HWND CreateMainWindow(HINSTANCE hInstance) {
         return NULL;
     }
 
-    // Create main window
+
     HWND hwndMain = CreateWindowEx(WS_EX_TOPMOST, NAME, NAME, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION,
         x, y, WINDOW_WIDTH, WINDOW_HEIGHT, hwndBase, NULL, hInstance, NULL);
 
     if (!hwndMain) {
-        MessageBox(NULL, L"Error creating window.", NAME, MB_OK | MB_ICONERROR);
+        MessageBox(NULL, L"Error creating main window", NAME, MB_OK | MB_ICONERROR);
         return NULL;
     }
 
     return hwndMain;
+}
+
+static void StartImGuiTimer() {
+    if (hwndMain) {
+        SetTimer(hwndMain, IMGUI_TIMER_ID, IMGUI_TIMER_MS, NULL);
+    }
+}
+static void StopImGuiTimer() {
+    if (hwndMain) {
+        KillTimer(hwndMain, IMGUI_TIMER_ID);
+    }
 }
 
 void InitializeUI(HINSTANCE hInstance) {
@@ -107,33 +124,12 @@ void InitializeUI(HINSTANCE hInstance) {
     hwndMain = CreateMainWindow(hInstance);
     if (hwndMain) {
         if (!InitializeImGui(hwndMain)) {
-            MessageBox(NULL, L"Failed to initialize ImGui", NAME, MB_OK | MB_ICONERROR);
+            MessageBox(NULL, L"Error initializing UI", NAME, MB_OK | MB_ICONERROR);
             return;
         }
     }
-}
-
-static void StartImGuiTimer() {
-    if (hwndMain) {
-        SetTimer(hwndMain, IMGUI_TIMER_ID, IMGUI_TIMER_MS, NULL);
-    }
-}
-static void StopImGuiTimer() {
-    if (hwndMain) {
-        KillTimer(hwndMain, IMGUI_TIMER_ID);
-    }
-}
-
-void ShowAppInterface(bool minimizeToTray) {
-    if (minimizeToTray) {
-        MinimizeWindowToTray(hwndMain);
-        StopImGuiTimer();
-    }
-    else {
-        ShowWindow(hwndMain, SW_SHOW);
-        SetForegroundWindow(hwndMain);
-        StartImGuiTimer();
-    }
+    MinimizeWindowToTray(hwndMain);
+    StopImGuiTimer();
 }
 
 void ExecuteMenu() {
@@ -145,9 +141,8 @@ void ExecuteMenu() {
         MessageBox(NULL, L"Error creating menu.", L"Trayy", MB_OK | MB_ICONERROR);
         return;
     }
-    wchar_t buffer[256];
-    GetWindowText(hwndForMenu, buffer, 256);
-    if (wcscmp(buffer, NAME) == 0) {
+
+    if (hwndForMenu == hwndMain) {
         AppendMenu(hMenu, MF_STRING, IDM_RESTORE, L"App List");
         AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
         AppendMenu(hMenu, MF_SEPARATOR, 0, NULL); //--------------
@@ -472,6 +467,7 @@ void RenderImGuiFrame() {
 }
 
 void RenderMainUI() {
+    // OutputDebugStringW(L"Rendering Main UI\n");
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
     if (!ImGui::Begin("Trayy Settings", nullptr,
@@ -552,7 +548,7 @@ void RenderMainUI() {
                 // unselected
                 ImVec2 row_start_pos = ImGui::GetCursorScreenPos();
 
-                float textWidth = availWidth - 2 * btnWidth - 3 * spacingWidth;
+                float textWidth = availWidth - 4 * btnWidth - 3 * spacingWidth;
                 ImVec2 itemSize = ImVec2(textWidth, frameH);
                 const char* label = localCache[i].second.c_str();
 
@@ -585,7 +581,7 @@ void RenderMainUI() {
                 bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
                 if (isSpecial) {
                     PushDarkBlueButtonStyle();
-                    if (ImGui::Button("G", ImVec2(btnWidth, btnWidth))) {
+                    if (ImGui::Button("Graphical", ImVec2(btnWidth * 3, btnWidth))) {
                         specialAppNames.erase(localCache[i].first);
                         UpdateSpecialAppsList(specialAppNames);
                         MarkAppListDirty();
@@ -594,7 +590,7 @@ void RenderMainUI() {
                 }
                 else {
                     PushBlueButtonStyle();
-                    if (ImGui::Button("N", ImVec2(btnWidth, btnWidth))) {
+                    if (ImGui::Button("Normal", ImVec2(btnWidth * 3, btnWidth))) {
                         specialAppNames.insert(localCache[i].first);
                         UpdateSpecialAppsList(specialAppNames);
                         MarkAppListDirty();
@@ -700,8 +696,15 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     LRESULT imguiResult = ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
     if (imguiResult) {
-        // force a repaint
-        InvalidateRect(hWnd, NULL, FALSE);
+        // Respond to keyboard inputs immediately
+        if ((msg >= WM_KEYFIRST && msg <= WM_KEYLAST) ||
+            (msg >= 0x0281 && msg <= 0x0291)) {
+            RenderImGuiFrame();
+        }
+        else {
+            // For mouse and other inputs, invalidate to render on next timer tick
+            InvalidateRect(hWnd, NULL, FALSE);
+        }
         return 0;
     }
 
@@ -723,6 +726,5 @@ LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         break;
     }
-    
     return -1;
 }
