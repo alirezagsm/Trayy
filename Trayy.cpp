@@ -6,6 +6,7 @@
 #include <thread>
 #include <set>
 #include <unordered_set>
+#include <unordered_map>
 #include <psapi.h>
 #include <algorithm>
 #include <codecvt>
@@ -15,6 +16,7 @@
 // Global variables
 UINT WM_TASKBAR_CREATED;
 HWINEVENTHOOK hEventHook;
+HWINEVENTHOOK hLocationHook;
 HINSTANCE hInstance;
 HMODULE hLib;
 HWND hwndBase;
@@ -610,20 +612,6 @@ void LoadSettings() {
     MarkAppListDirty();
 }
 
-void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
-{
-    if (event == EVENT_SYSTEM_FOREGROUND)
-    {
-        if (GetForegroundWindow() == hwnd) { // good for windows things
-            return;
-        }
-        if (appCheck(hwnd))
-        {
-            RestoreWindowFromTray(hwnd);
-        }
-    }
-}
-
 void SaveSettings() {
     std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
     file.imbue(std::locale(file.getloc(),
@@ -642,6 +630,143 @@ void SaveSettings() {
     file.close();
     LoadSettings();
 }
+
+// Overlay Window Logic
+std::unordered_map<HWND, HWND> g_OverlayWindows;
+const wchar_t* OVERLAY_CLASS_NAME = L"TrayyOverlayWindow";
+
+LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rect;
+        GetClientRect(hwnd, &rect);
+
+        // Fill with color key (magenta)
+        HBRUSH hBgBrush = CreateSolidBrush(RGB(255, 0, 255));
+        FillRect(hdc, &rect, hBgBrush);
+        DeleteObject(hBgBrush);
+
+        // Draw blue border
+        HBRUSH hBrush = CreateSolidBrush(RGB(0, 120, 215)); // Windows Blue
+        int thickness = 4;
+
+        // Top
+        RECT r = { 0, 0, rect.right, thickness };
+        FillRect(hdc, &r, hBrush);
+        // Bottom
+        r = { 0, rect.bottom - thickness, rect.right, rect.bottom };
+        FillRect(hdc, &r, hBrush);
+        // Left
+        r = { 0, 0, thickness, rect.bottom };
+        FillRect(hdc, &r, hBrush);
+        // Right
+        r = { rect.right - thickness, 0, rect.right, rect.bottom };
+        FillRect(hdc, &r, hBrush);
+
+        DeleteObject(hBrush);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+void RegisterOverlayClass(HINSTANCE hInstance) {
+    WNDCLASSEX wc = { 0 };
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.lpfnWndProc = OverlayWndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = OVERLAY_CLASS_NAME;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+    RegisterClassEx(&wc);
+}
+
+void AddOverlay(HWND target) {
+    if (g_OverlayWindows.find(target) != g_OverlayWindows.end()) return;
+
+    RECT rect;
+    GetWindowRect(target, &rect);
+
+    HWND overlay = CreateWindowEx(
+        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        OVERLAY_CLASS_NAME,
+        L"",
+        WS_POPUP | WS_VISIBLE,
+        rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+        NULL, NULL, hInstance, NULL
+    );
+
+    SetLayeredWindowAttributes(overlay, RGB(255, 0, 255), 0, LWA_COLORKEY);
+
+    g_OverlayWindows[target] = overlay;
+}
+
+void RemoveOverlay(HWND target) {
+    auto it = g_OverlayWindows.find(target);
+    if (it != g_OverlayWindows.end()) {
+        DestroyWindow(it->second);
+        g_OverlayWindows.erase(it);
+    }
+}
+
+void UpdateOverlayPosition(HWND target) {
+    auto it = g_OverlayWindows.find(target);
+    if (it == g_OverlayWindows.end()) return;
+
+    HWND overlay = it->second;
+    if (!IsWindow(target)) return;
+
+    if (!IsWindowVisible(target) || IsIconic(target)) {
+        ShowWindow(overlay, SW_HIDE);
+    }
+    else {
+        ShowWindow(overlay, SW_SHOWNA);
+        RECT rect;
+        GetWindowRect(target, &rect);
+        SetWindowPos(overlay, HWND_TOPMOST, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+}
+
+void UpdateOverlays() {
+    for (auto it = g_OverlayWindows.begin(); it != g_OverlayWindows.end(); ) {
+        HWND target = it->first;
+        if (!IsWindow(target)) {
+            DestroyWindow(it->second);
+            it = g_OverlayWindows.erase(it);
+            continue;
+        }
+        UpdateOverlayPosition(target);
+        ++it;
+    }
+}
+
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime)
+{
+    if (event == EVENT_SYSTEM_FOREGROUND)
+    {
+        if (GetForegroundWindow() == hwnd) { // good for windows things
+            return;
+        }
+        if (appCheck(hwnd))
+        {
+            RestoreWindowFromTray(hwnd);
+        }
+    }
+    else if (event == EVENT_OBJECT_LOCATIONCHANGE)
+    {
+        if (idObject == OBJID_WINDOW && idChild == CHILDID_SELF) {
+            if (g_OverlayWindows.find(hwnd) != g_OverlayWindows.end()) {
+                UpdateOverlayPosition(hwnd);
+            }
+        }
+    }
+}
+
 void HandleMinimizeCommand(HWND hwnd) {
     if (appCheck((HWND)hwnd)) {
         MinimizeWindowToTray((HWND)hwnd);
@@ -699,11 +824,15 @@ void HandleMaximizeRightClickCommand(HWND hwnd) {
     if (!IsWindow(hwnd)) return;
 
     LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    if (exStyle & WS_EX_TOPMOST) {
+    bool isTopMost = (exStyle & WS_EX_TOPMOST) != 0;
+
+    if (isTopMost) {
         SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        RemoveOverlay(hwnd);
     }
     else {
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        AddOverlay(hwnd);
     }
 }
 
@@ -738,6 +867,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (wParam == IMGUI_TIMER_ID) {
             // Periodic ImGui render tick
             RenderImGuiFrame();
+            UpdateOverlays();
             return 0;
         }
         break;
@@ -837,6 +967,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (hLib) {
             UnRegisterHook();
             UnhookWinEvent(hEventHook);
+            if (hLocationHook) UnhookWinEvent(hLocationHook);
             FreeLibrary(hLib);
         }
         RefreshTray();
@@ -890,12 +1021,15 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE /*hPrevInstance*/, _
         return 0;
     }
 
+    hLocationHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, NULL, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+
     for (int i = 0; i < MAXTRAYITEMS; i++) {
         hwndItems[i] = NULL;
     }
 
     WM_TASKBAR_CREATED = RegisterWindowMessage(L"TaskbarCreated");
 
+    RegisterOverlayClass(hInstance);
 
     InitializeUI(hInstance);
 
