@@ -199,6 +199,33 @@ std::wstring getProcessName(HWND hwnd) {
     return std::wstring(processName);
 }
 
+std::wstring GetCleanAppName(const std::wstring& appName) {
+    size_t lastSpace = appName.find_last_of(L' ');
+    if (lastSpace != std::wstring::npos) {
+        std::wstring lastWord = appName.substr(lastSpace + 1);
+        if (lastWord.length() > 2 && (lastWord[0] == L'w' || lastWord[0] == L'W')) {
+            size_t hPos = std::wstring::npos;
+            for (size_t j = 1; j < lastWord.length(); ++j) {
+                if (lastWord[j] == L'h' || lastWord[j] == L'H') {
+                    hPos = j;
+                    break;
+                }
+            }
+            if (hPos != std::wstring::npos && hPos > 1 && hPos < lastWord.length() - 1) {
+                try {
+                    std::stoi(lastWord.substr(1, hPos - 1));
+                    std::stoi(lastWord.substr(hPos + 1));
+                    return appName.substr(0, lastSpace);
+                }
+                catch (...) {
+                    OutputDebugString(L"Not a dimension string in GetCleanAppName\n");
+                }
+            }
+        }
+    }
+    return appName;
+}
+
 bool MatchesAppName(HWND hwnd) {
     std::wstring originalProcessName = getProcessName(hwnd);
     std::wstring processName = originalProcessName;
@@ -212,10 +239,12 @@ bool MatchesAppName(HWND hwnd) {
         switchedProcessNametoWindowName = true;
     }
 
-    for (const auto& appName : appNames) {
+    for (auto appName : appNames) {
         if (appName.empty()) {
             continue;
         }
+
+        appName = GetCleanAppName(appName);
 
         std::wistringstream iss(appName);
         std::wstring word;
@@ -240,6 +269,13 @@ bool MatchesAppName(HWND hwnd) {
 
             if (originalProcessName == processPart) {
                 if (titlePart.empty()) {
+                    // Special case for Thunderbird
+                    if (processPart == L"thunderbird.exe") {
+                        titlePart = L" - Mozilla Thunderbird";
+                        if (windowNameStr.find(titlePart) != std::wstring::npos) {
+                            return true;
+                        }
+                    }
                     return true;
                 }
                 if (windowNameStr.find(titlePart) != std::wstring::npos) {
@@ -406,7 +442,10 @@ void RestoreWindowFromTray(std::wstring appName) {
             if (extPos != std::wstring::npos) {
                 processName = nameWithoutExt.substr(0, extPos);
             }
-            if (processName == appName) {
+
+            std::wstring appNameClean = GetCleanAppName(appName);
+
+            if (processName == appNameClean) {
                 RestoreWindowFromTray(hwndItems[i]);
                 return;
             }
@@ -649,13 +688,23 @@ void HandleCloseRightClickCommand(HWND hwnd) {
 
     std::wstring processName = getProcessName(hwnd);
     size_t extPos = processName.rfind(L'.');
-    if (extPos != std::wstring::npos) {
-        processName = processName.substr(0, extPos);
-    }
 
     appNames.insert(processName);
     SaveSettings();
     MinimizeWindowToTray(hwnd);
+}
+
+// Quick action: toggle Always on Top
+void HandleMaximizeRightClickCommand(HWND hwnd) {
+    if (!IsWindow(hwnd)) return;
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    if (exStyle & WS_EX_TOPMOST) {
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    }
+    else {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    }
 }
 
 // This function handles all window messages
@@ -729,6 +778,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     case WM_X_R:
         HandleCloseRightClickCommand((HWND)lParam);
+        break;
+    case WM_MAX_R:
+        HandleMaximizeRightClickCommand((HWND)lParam);
         break;
     case WM_REMTRAY:
         RestoreWindowFromTray((HWND)lParam);
