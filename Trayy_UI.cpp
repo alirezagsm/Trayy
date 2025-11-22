@@ -467,6 +467,7 @@ void RenderImGuiFrame() {
 }
 
 void RenderMainUI() {
+    static bool showHelpOverlay = false;
     // OutputDebugStringW(L"Rendering Main UI\n");
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -477,7 +478,111 @@ void RenderMainUI() {
         return;
     }
 
-    if (updateAvailable) {
+    if (showHelpOverlay) {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Help & Information");
+
+        ImGui::SameLine();
+
+        float rightEdge = ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x;
+        const char* backLabel = "Back";
+        float backWidth = ImGui::CalcTextSize(backLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetCursorPosX(rightEdge - backWidth);
+
+        PushRedButtonStyle();
+        if (ImGui::Button(backLabel)) {
+            showHelpOverlay = false;
+        }
+        PopButtonStyle();
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::BeginChild("HelpScrollRegion", ImVec2(0, 0), false)) {
+            ImVec4 highlightColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Do not show on Taskbar:");
+            ImGui::TextWrapped("Ensures that applications in the list do not appear on the Windows taskbar.");
+            ImGui::Dummy(ImVec2(0, 5));
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Send to Tray also when Closed:");
+            ImGui::TextWrapped("Clicking the X button will minimize the application to the system tray instead of closing it.");
+            ImGui::Dummy(ImVec2(0, 5));
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "App List Rules:");
+
+            ImGui::Bullet(); ImGui::Text("No extension:");
+            ImGui::SameLine(); ImGui::TextColored(highlightColor, "WhatsApp Web");
+            ImGui::Indent(); ImGui::TextWrapped("Matches browser tab names for web apps."); ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("With extension:");
+            ImGui::SameLine(); ImGui::TextColored(highlightColor, "thunderbird.exe");
+            ImGui::Indent(); ImGui::TextWrapped("Matches app process names exactly as seen in Task Manager."); ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("Window name:");
+            ImGui::SameLine(); ImGui::TextColored(highlightColor, "thunderbird.exe write");
+            ImGui::Indent(); ImGui::TextWrapped("Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("Graphical mode:");
+            ImGui::SameLine(); ImGui::TextColored(highlightColor, "Obsidian.exe w55h50");
+            ImGui::Indent(); ImGui::TextWrapped("Refines the bounding box used for Graphical mode with the given width and height in pixels."); ImGui::Unindent();
+
+            ImGui::Dummy(ImVec2(0, 5));
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Modes:");
+
+            ImGui::Bullet(); ImGui::Text("Normal:");
+            ImGui::Indent();
+            ImGui::TextWrapped("Uses Windows API to customize closing behavior when clicking control buttons on the standard title bar.");
+            ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("Graphical:");
+            ImGui::Indent();
+            ImGui::TextWrapped("For applications without standard title bars. Intercepts click positions in the top-right corner to detect control button presses.");
+            ImGui::Unindent();
+
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Quick Actions:");
+
+            ImGui::Bullet(); ImGui::Text("Right-click Minimize:");
+            ImGui::Indent();
+            ImGui::TextWrapped("Send the application to tray without adding it to app list.");
+            ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("Right-click Close:");
+            ImGui::Indent();
+            ImGui::TextWrapped("Send the application to tray and permanently add it to app list.");
+            ImGui::Unindent();
+
+            ImGui::Bullet(); ImGui::Text("Right-click Maximize:");
+            ImGui::Indent();
+            ImGui::TextWrapped("Toggle the app always-on-top.");
+            ImGui::Unindent();
+
+            ImGui::Dummy(ImVec2(0, 5));
+
+            PushBlueButtonStyle();
+            if (ImGui::Button("About Trayy", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
+                std::thread([] {
+                    ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
+                    }).detach();
+            }
+            PopButtonStyle();
+
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.9f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
+                std::thread([] {
+                    ShellExecuteA(NULL, "open", "https://www.ko-fi.com/alirezagsm", NULL, NULL, SW_SHOWNORMAL);
+                    }).detach();
+            }
+            ImGui::PopStyleColor(3);
+
+        }
+        ImGui::EndChild();
+
+        ImGui::End();
+        return;
+    }    if (updateAvailable) {
         PushGreenButtonStyle();
         if (ImGui::Button("Update Available", ImVec2(-1, 0))) HandleUpdateButtonClick(hwndMain);
         PopButtonStyle();
@@ -485,6 +590,18 @@ void RenderMainUI() {
     }
 
     ImGui::Checkbox("Do not show on Taskbar", &NOTASKBAR);
+    ImGui::SameLine();
+
+    const char* helpText = " ? ";
+    float helpTextWidth = ImGui::CalcTextSize(helpText).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    float rightEdge = ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x;
+    ImGui::SetCursorPosX(rightEdge - helpTextWidth);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));
+    if (ImGui::Button(helpText)) {
+        showHelpOverlay = true;
+    }
+    ImGui::PopStyleColor();
     ImGui::Checkbox("Send to Tray also when Closed", &HOOKBOTH);
 
     ImGui::Spacing();
