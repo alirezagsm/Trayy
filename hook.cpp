@@ -1,6 +1,7 @@
 #include "Trayy.h"
 #include <Shellscalingapi.h>
 #include <Psapi.h>
+#include <windowsx.h>
 
 static HHOOK _hMouse = NULL;
 static HHOOK _hLLMouse = NULL;
@@ -22,17 +23,22 @@ bool ActivateWindow(HWND hwnd) {
     return (GetForegroundWindow() == hwnd);
 }
 
-inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isRightClick = false) {
+inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool isRightClick = false) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
         UINT msg = 0;
         if (isRightClick) {
-            msg = isMinimize ? WM_MIN_R : WM_X_R;
+            if (isMaximize)
+                msg = WM_MAX_R;
+            else
+                msg = isMinimize ? WM_MIN_R : WM_X_R;
         }
         else {
+            if (isMaximize) return; // Default behavior for left click on maximize
             msg = isMinimize ? WM_MIN : WM_X;
         }
-        PostMessage(mainWindow, msg, 0, reinterpret_cast<LPARAM>(hwnd));
+        if (msg)
+            PostMessage(mainWindow, msg, 0, reinterpret_cast<LPARAM>(hwnd));
     }
 }
 
@@ -77,15 +83,47 @@ void ReleaseSharedMemory() {
     }
 }
 
-bool IsSpecialApp(const std::wstring& processName) {
+bool IsSpecialApp(const std::wstring& processName, int& customWidth, int& customHeight) {
     if (!AccessSharedMemory() || !_pSharedData)
         return false;
 
+    customWidth = 0;
+    customHeight = 0;
+
     for (int i = 0; i < _pSharedData->count; i++) {
-        std::wstring specialApp = _pSharedData->specialApps[i];
-        specialApp = specialApp.substr(0, specialApp.find(L' '));
-        if (_wcsicmp(specialApp.c_str(), processName.c_str()) == 0) {
-            return true;
+        std::wstring specialAppEntry = _pSharedData->specialApps[i];
+        size_t firstSpace = specialAppEntry.find(L' ');
+        std::wstring appName = specialAppEntry.substr(0, firstSpace);
+
+        if (_wcsicmp(appName.c_str(), processName.c_str()) == 0) {
+            size_t lastSpace = specialAppEntry.find_last_of(L' ');
+            if (lastSpace != std::wstring::npos && lastSpace + 1 < specialAppEntry.length()) {
+                std::wstring whStr = specialAppEntry.substr(lastSpace + 1);
+                if (whStr.length() > 2 && (whStr[0] == L'w' || whStr[0] == L'W')) {
+                    size_t hPos = std::wstring::npos;
+                    for (size_t j = 1; j < whStr.length(); ++j) {
+                        if (whStr[j] == L'h' || whStr[j] == L'H') {
+                            hPos = j;
+                            break;
+                        }
+                    }
+
+                    if (hPos != std::wstring::npos && hPos > 1 && hPos < whStr.length() - 1) {
+                        try {
+                            std::wstring wStr = whStr.substr(1, hPos - 1);
+                            std::wstring hStr = whStr.substr(hPos + 1);
+                            if (!wStr.empty() && !hStr.empty()) {
+                                customWidth = std::stoi(wStr);
+                                customHeight = std::stoi(hStr);
+                            }
+                        }
+                        catch (...) {
+                            // Parsing failed, treat as a normal special app
+                        }
+                    }
+                }
+            }
+            return true; // It's a special app
         }
     }
 
@@ -109,17 +147,18 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if ((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONDOWN) || (wParam == WM_NCRBUTTONUP)) {
         if (info->wHitTestCode != HTCLIENT) {
             const BOOL isHitMin = (info->wHitTestCode == HTMINBUTTON);
+            const BOOL isHitMax = (info->wHitTestCode == HTMAXBUTTON);
             const BOOL isHitX = (info->wHitTestCode == HTCLOSE);
             const BOOL isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
-            if (((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCRBUTTONDOWN)) && (isHitMin || isHitX)) {
+            if (((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCRBUTTONDOWN)) && (isHitMin || isHitMax || isHitX)) {
                 _hLastHit = info->hwnd;
                 if (ActivateWindow(info->hwnd))
                     return 1;
             }
-            else if (((wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONUP)) && (isHitMin || isHitX)) {
+            else if (((wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONUP)) && (isHitMin || isHitMax || isHitX)) {
                 if (info->hwnd == _hLastHit) {
-                    SendWindowAction(info->hwnd, isHitMin, isRight);
+                    SendWindowAction(info->hwnd, isHitMin, isHitMax, isRight);
                     _hLastHit = NULL;
                     return 1;
                 }
@@ -183,47 +222,74 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
 
         std::wstring processName = getProcessName(hwnd);
+        int customWidth = 0, customHeight = 0;
 
-        if (!processName.empty() && IsSpecialApp(processName)) {
-            // Calculate position relative to window
-            RECT windowRect;
-            if (!GetWindowRect(hwnd, &windowRect))
-                return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
+        if (!processName.empty() && IsSpecialApp(processName, customWidth, customHeight)) {
+            TITLEBARINFOEX tbi;
+            tbi.cbSize = sizeof(TITLEBARINFOEX);
+            SendMessage(hwnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&tbi);
 
-            int windowWidth = windowRect.right - windowRect.left;
-            int relativeX = pt.x - windowRect.left;
-            int relativeY = pt.y - windowRect.top;
+            bool isHitMin = false;
+            bool isHitMax = false;
+            bool isHitX = false;
 
-            // Get DPI scale
-            float dpiScale = GetWindowDpiScale(hwnd);
-
-            // Calculate sizes
-            const int captionHeight = GetSystemMetrics(SM_CYCAPTION);
-            const int frameHeight = GetSystemMetrics(SM_CYFRAME);
-            const int borderPadding = GetSystemMetrics(SM_CXPADDEDBORDER);
-
-            // custom scaling for specific apps
-            float aspectRatio = 1.64f;
-            int offsetY = -12;
-            if (processName == L"thunderbird.exe") {
-                aspectRatio = 1.5f;
-                offsetY = -1;
+            // First, try the reliable GetTitleBarInfoEx method
+            if (tbi.rgrect[2].right > tbi.rgrect[2].left && PtInRect(&tbi.rgrect[2], pt)) { // Minimize button
+                isHitMin = true;
             }
-            int titleBarHeight = (captionHeight + frameHeight + borderPadding * 2 + offsetY) * dpiScale;
-            int buttonWidth = titleBarHeight * aspectRatio;
-            int closeButtonLeft = windowWidth - buttonWidth;
-            int maximizeButtonLeft = closeButtonLeft - buttonWidth;
-            int minimizeButtonLeft = maximizeButtonLeft - buttonWidth;
+            if (tbi.rgrect[3].right > tbi.rgrect[3].left && PtInRect(&tbi.rgrect[3], pt)) { // Maximize button
+                isHitMax = true;
+            }
+            if (tbi.rgrect[5].right > tbi.rgrect[5].left && PtInRect(&tbi.rgrect[5], pt)) { // Close button
+                isHitX = true;
+            }
 
-            // Determine hits
-            bool isInTitleBar = (relativeY < titleBarHeight);
-            bool isHitX = isInTitleBar && (relativeX >= closeButtonLeft);
-            bool isHitMin = isInTitleBar && (relativeX >= minimizeButtonLeft) && (relativeX < maximizeButtonLeft);
+            // Fallback to manual calculation if GetTitleBarInfoEx fails or for custom dimensions
+            if (!isHitMin && !isHitMax && !isHitX) {
+                RECT windowRect;
+                if (!GetWindowRect(hwnd, &windowRect))
+                    return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
+
+                float dpiScale = GetWindowDpiScale(hwnd);
+                int windowWidth = windowRect.right - windowRect.left;
+                int relativeX = pt.x - windowRect.left;
+                int relativeY = pt.y - windowRect.top;
+                int titleBarHeight, buttonWidth;
+
+                if (customWidth > 0 && customHeight > 0) {
+                    titleBarHeight = customHeight * dpiScale;
+                    buttonWidth = customWidth * dpiScale;
+                }
+                else {
+                    const int captionHeight = GetSystemMetrics(SM_CYCAPTION);
+                    const int frameHeight = GetSystemMetrics(SM_CYFRAME);
+                    const int borderPadding = GetSystemMetrics(SM_CXPADDEDBORDER);
+                    float aspectRatio = 1.64f;
+                    int offsetY = -12;
+                    if (processName == L"thunderbird.exe") {
+                        aspectRatio = 1.5f;
+                        offsetY = -1;
+                    }
+                    titleBarHeight = (captionHeight + frameHeight + borderPadding * 2 + offsetY) * dpiScale;
+                    buttonWidth = titleBarHeight * aspectRatio;
+                }
+
+                int closeButtonLeft = windowWidth - buttonWidth;
+                int maximizeButtonLeft = closeButtonLeft - buttonWidth;
+                int minimizeButtonLeft = maximizeButtonLeft - buttonWidth;
+
+                bool isInTitleBar = (relativeY < titleBarHeight);
+                if (isInTitleBar) {
+                    isHitX = (relativeX >= closeButtonLeft);
+                    isHitMax = (relativeX >= maximizeButtonLeft) && (relativeX < closeButtonLeft);
+                    isHitMin = (relativeX >= minimizeButtonLeft) && (relativeX < maximizeButtonLeft);
+                }
+            }
 
             // Handle button clicks for special apps
             bool isRight = (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP);
             if ((wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN)) {
-                if (isHitX || isHitMin) {
+                if (isHitX || isHitMin || isHitMax) {
                     _hLastHit = hwnd;
                     if (ActivateWindow(hwnd)) {
                         return 1; // Consume the message
@@ -234,8 +300,8 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
                 }
             }
             else if ((wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) && hwnd == _hLastHit) {
-                if (isHitX || isHitMin) {
-                    SendWindowAction(hwnd, isHitMin, isRight);
+                if (isHitX || isHitMin || isHitMax) {
+                    SendWindowAction(hwnd, isHitMin, isHitMax, isRight);
                     _hLastHit = NULL;
                     return 1;
                 }
