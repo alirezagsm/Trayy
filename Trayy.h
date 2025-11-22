@@ -30,6 +30,7 @@
 #define WM_REMTRAY      0x0405
 #define WM_REFRTRAY     0x0406
 #define WM_TRAYCMD      0x0407
+#define WM_MAX_R        0x0408
 #define IDM_RESTORE     0x1001
 #define IDM_CLOSE       0x1002
 #define IDM_EXIT        0x1003
