@@ -215,8 +215,8 @@ std::wstring GetCleanAppName(const std::wstring& appName) {
             }
             if (hPos != std::wstring::npos && hPos > 1 && hPos < lastWord.length() - 1) {
                 try {
-                    std::stoi(lastWord.substr(1, hPos - 1));
-                    std::stoi(lastWord.substr(hPos + 1));
+                    (void)std::stoi(lastWord.substr(1, hPos - 1));
+                    (void)std::stoi(lastWord.substr(hPos + 1));
                     return appName.substr(0, lastSpace);
                 }
                 catch (...) {
@@ -376,7 +376,7 @@ void RestoreWindowFromTray(HWND hwnd) {
     wchar_t windowName[256];
     GetWindowText(hwnd, windowName, 256);
     if (hwnd == hwndMain) {
-        // Mirror the exact positioning logic from CreateMainWindow()
+        // Mirror logic from CreateMainWindow()
         RECT rect;
         HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
         if (!taskbar) {
@@ -427,6 +427,11 @@ void RestoreWindowFromTray(HWND hwnd) {
 
     if (IsWindow(hwnd)) {
         RefreshWindowInTray(hwnd);
+    }
+
+    // If app is no longer in app list
+    if (MatchesAppName(hwnd) == false) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
     }
 }
 
@@ -648,8 +653,9 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         FillRect(hdc, &rect, hBgBrush);
         DeleteObject(hBgBrush);
 
-        // Draw blue border
-        HBRUSH hBrush = CreateSolidBrush(RGB(0, 120, 215)); // Windows Blue
+        // Draw border using the accent color
+        COLORREF accentColor = GetSysColor(13); // COLOR_HIGHLIGHT
+        HBRUSH hBrush = CreateSolidBrush(accentColor); // Use accent color
         int thickness = 4;
 
         // Top
@@ -781,17 +787,8 @@ void HandleCloseCommand(HWND hwnd) {
         MinimizeWindowToTray((HWND)hwnd);
     }
     else {
-        wchar_t windowName[256];
-        GetWindowText(hwnd, windowName, 256);
-
         SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
-
-        // if (wcslen(windowName) == 0) {
-        //     SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
-        // }
-        // else {
-        //     PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
-        // }
+        PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
     }
 }
 

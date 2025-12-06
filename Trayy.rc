@@ -1,4 +1,0 @@
-#include "Trayy.h"
-#define IDC_STATIC -1
-IDI_ICON1           ICON            "logo.ico"
-IDI_ICON2           ICON            "logo_update.ico"

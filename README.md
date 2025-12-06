@@ -1,5 +1,5 @@
 <h1 align="center">
-    <img src="logo.ico" alt="Trayy logo" width="80"/>
+    <img src="media/logo.ico" alt="Trayy logo" width="80"/>
     <div>
     Trayy
     </div>
@@ -38,8 +38,8 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 7. Need an app tucked away for a moment? Right‑click its Minimize button to send it to the tray temporarily. Right‑click the X button to add the app permanently to Trayy's list.
 
 <p align="center">
-  <img src="demo.png" alt="GUI demo" style="height:380px; width:auto; vertical-align:top;" align="top"/>
-  <img src="demo.gif" alt="Video demo" style="height:375px; width:auto; vertical-align:top;" align="top" autoplay/>
+  <img src="media/demo.png" alt="GUI demo" style="height:380px; width:auto; vertical-align:top;" align="top"/>
+  <img src="media/demo.gif" alt="Video demo" style="height:375px; width:auto; vertical-align:top;" align="top" autoplay/>
 </p>
 
 **Pro Move**: Let Trayy join your startup squad! Add Trayy's shortcut to your `shell:startup` folder, along with all your other favorite apps you want to keep tucked away in the system tray. For WebApps, you can ask your browser to add their shortcuts to your Desktop. Then, simply move those shortcuts into the startup folder. Trayy will chill for a bit, letting the startup process finish, then swoop in to tidy everything up! It's a game changer for messaging and productivity apps!

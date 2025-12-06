@@ -11,6 +11,7 @@
 #include <Windows.h>
 #include <thread>
 #include <Shellscalingapi.h>
+#include <cmath>
 
 int DESKTOP_PADDING = 15;
 static inline float DPI_SCALE = 1.0f;
@@ -48,6 +49,7 @@ static std::mutex g_appCacheMutex;
 static bool g_ImGuiInitialized = false;
 static std::vector<std::pair<std::wstring, std::string>> g_appListCache; // Cache converted strings
 static bool g_appListDirty = true; // Flag to update cache when needed
+static float g_scrollVelocity = 0.0f;
 
 // Note: hwndMain is defined in Trayy.cpp; we use the extern from Trayy.h
 
@@ -444,6 +446,20 @@ void RenderImGuiFrame() {
         UpdateAppListCache();
     }
 
+    // Apply smooth scrolling
+    ImGuiIO& io = ImGui::GetIO();
+    if (std::abs(g_scrollVelocity) > 0.001f) {
+        float step = g_scrollVelocity * 0.15f; // Adjust smoothing speed here
+        if (std::abs(step) < 0.01f) step = (g_scrollVelocity > 0) ? 0.01f : -0.01f; // Min speed
+        if (std::abs(step) > std::abs(g_scrollVelocity)) step = g_scrollVelocity; // Don't overshoot
+
+        io.MouseWheel += step;
+        g_scrollVelocity -= step;
+    }
+    else {
+        g_scrollVelocity = 0.0f;
+    }
+
     // Start the ImGui frame
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -497,7 +513,8 @@ void RenderMainUI() {
         ImGui::Separator();
         ImGui::Spacing();
 
-        if (ImGui::BeginChild("HelpScrollRegion", ImVec2(0, 0), false)) {
+        float listHeight = ImGui::GetContentRegionAvail().y - BUTTON_HEIGHT; // Leave space for buttons
+        if (ImGui::BeginChild("HelpScrollRegion", ImVec2(0, listHeight), false)) {
             ImVec4 highlightColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
 
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Do not show on Taskbar:");
@@ -520,11 +537,11 @@ void RenderMainUI() {
 
             ImGui::Bullet(); ImGui::Text("Window name:");
             ImGui::SameLine(); ImGui::TextColored(highlightColor, "thunderbird.exe write");
-            ImGui::Indent(); ImGui::TextWrapped("Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
+            ImGui::Indent(); ImGui::TextWrapped("Optional: Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Graphical mode:");
             ImGui::SameLine(); ImGui::TextColored(highlightColor, "Obsidian.exe w55h50");
-            ImGui::Indent(); ImGui::TextWrapped("Refines the bounding box used for Graphical mode with the given width and height in pixels."); ImGui::Unindent();
+            ImGui::Indent(); ImGui::TextWrapped("Optional: Refines the bounding box used for Graphical mode with the given width and height in pixels."); ImGui::Unindent();
 
             ImGui::Dummy(ImVec2(0, 5));
 
@@ -537,7 +554,7 @@ void RenderMainUI() {
 
             ImGui::Bullet(); ImGui::Text("Graphical:");
             ImGui::Indent();
-            ImGui::TextWrapped("For applications without standard title bars. Intercepts click positions in the top-right corner to detect control button presses.");
+            ImGui::TextWrapped("Intercepts click positions in the top-right corner to detect control button presses. Intended for applications without standard title bars.");
             ImGui::Unindent();
 
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Quick Actions:");
@@ -554,32 +571,25 @@ void RenderMainUI() {
 
             ImGui::Bullet(); ImGui::Text("Right-click Maximize:");
             ImGui::Indent();
-            ImGui::TextWrapped("Toggle the app always-on-top.");
+            ImGui::TextWrapped("Toggle always-on-top.");
             ImGui::Unindent();
 
             ImGui::Dummy(ImVec2(0, 5));
-
-            PushBlueButtonStyle();
-            if (ImGui::Button("About Trayy", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
-                std::thread([] {
-                    ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
-                    }).detach();
-            }
-            PopButtonStyle();
-
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.9f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-            if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
-                std::thread([] {
-                    ShellExecuteA(NULL, "open", "https://www.ko-fi.com/alirezagsm", NULL, NULL, SW_SHOWNORMAL);
-                    }).detach();
-            }
-            ImGui::PopStyleColor(3);
-
         }
-        ImGui::EndChild();
 
+        ImGui::EndChild();
+        ImGui::Spacing();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.9f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+        if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
+            std::thread([] {
+                ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
+                }).detach();
+        }
+
+        ImGui::PopStyleColor(3);
         ImGui::End();
         return;
     }    if (updateAvailable) {
@@ -811,6 +821,12 @@ void RenderMainUI() {
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT HandleImGuiMessages(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_MOUSEWHEEL) {
+        short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+        g_scrollVelocity += (float)zDelta / WHEEL_DELTA;
+        return 0; // Handle manually for smooth scrolling
+    }
+
     LRESULT imguiResult = ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
     if (imguiResult) {
         // Respond to keyboard inputs immediately
