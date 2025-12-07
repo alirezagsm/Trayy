@@ -28,28 +28,28 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 
 ## 🚀 Getting Started
 
-1.  Kick things off by downloading `Trayy.zip` and unzipping it to your desired location.
-2.  Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise a false positive but fear not! Trayy is harmless and also open source [VirusTotal report](https://www.virustotal.com/gui/file/ee5a61ea639532c625faf2a2be0268b8b69231df52bce514772fc2418e9d5fda?nocache=1). Run the app to get the party started.
-3.  Time to pick your superpowers:
+1. Kick things off by downloading `Trayy.zip` and unzipping it to your desired location.
+2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise a false positive but fear not! Trayy is harmless and also open source ([VirusTotal report](https://www.virustotal.com/gui/file/ee5a61ea639532c625faf2a2be0268b8b69231df52bce514772fc2418e9d5fda?nocache=1)). Run the app to get the party started.
+3. Time to pick your superpowers:
 
-    -   **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
-    -   **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray instead of closing.
+    - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
+    - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray instead of closing.
 
     Now, list out your favorite apps. Here are the rules:
 
-    -   **No extensions** (example `WhatsApp Web`): Trayy will look for browser tab titles that contain your specified string. This is mainly intended for WebApps. Use distinctive keywords to avoid accidental matches!
-    -   **With extension** (example `Notepad.exe`): Match any process name as seen in Task Manager that match your entries.
-    -   **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
+    - **No extensions** (example `WhatsApp Web`): Trayy will look for browser tab titles that contain your specified string. This is mainly intended for WebApps. Use distinctive keywords to avoid accidental matches!
+    - **With extension** (example `Notepad.exe`): Match any process name as seen in Task Manager that match your entries.
+    - **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
 
     Assign the desired capture method:
 
-    -   **N** or `Normal`: This mode intercepts the Windows API close commands for efficient handling of clicking the control buttons with a mouse. It won't intercept other closing methods such as keyboard shortcuts.
-    -   **G** or `Graphical`: For pesky apps that don't use standard window control buttons (like `Thunderbird` and `Obsidian`), Trayy will use a special detection method by watching clicks on the top‑right of the titlebar so even tricky programs can be tucked away smoothly!
+    - **N** or `Normal`: This mode intercepts the Windows API close commands for efficient handling of clicking the control buttons with a mouse. It won't intercept other closing methods such as keyboard shortcuts.
+    - **G** or `Graphical`: For pesky apps that don't use standard window controls (like `Thunderbird` and `Obsidian`), Trayy can use a special detection method by watching clicks on the top‑right of the titlebar so even tricky programs can be tucked away smoothly!
 
     You can modify your entries with these tricks:
 
-    -   If your app has multiple windows, you can optionally control which window to target by adding the desired title name to the process name. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
-    -   For the Graphical mode, you can optionally modify the control button bounding box by adding the desired size in pixels to your entry like this: `Obsidian.exe w55h50`.
+    - If your app has multiple windows, you can optionally control which window to target by adding the desired title name to the process name. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
+    - For the Graphical mode, you can optionally modify the control button bounding box by adding the desired size in pixels to your entry like this: `Obsidian.exe w55h50`.
 
 <p align="center">
   <img src="media/hitbox.png" alt="hitbox" style="height:100px; width:auto;" />
