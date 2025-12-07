@@ -22,6 +22,7 @@ static inline int MODIFY_BUTTON_WIDTH = 22;
 static constexpr int BASE_WINDOW_WIDTH = 300;
 static constexpr int BASE_WINDOW_HEIGHT = 500;
 static constexpr const char* DEFAULT_FONT_PATH = "C:\\Windows\\Fonts\\segoeui.ttf";
+static constexpr const char* DEFAULT_BFONT_PATH = "C:\\Windows\\Fonts\\segoeuib.ttf";
 static inline int FONT_SIZE = 18;
 static constexpr int IMGUI_TIMER_MS = 16; // ~60 FPS
 
@@ -482,8 +483,18 @@ void RenderImGuiFrame() {
     }
 }
 
+void customText(ImFont* font, const ImVec4& color, const char* text) {
+    ImGui::PushFont(font);
+    ImGui::TextColored(color, text);
+    ImGui::PopFont();
+}
+
 void RenderMainUI() {
     static bool showHelpOverlay = false;
+    ImFont* boldFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(DEFAULT_BFONT_PATH, FONT_SIZE * 1.0f);
+    if (!boldFont) {
+        boldFont = ImGui::GetIO().Fonts->Fonts[0];
+    }
     // OutputDebugStringW(L"Rendering Main UI\n");
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -495,7 +506,7 @@ void RenderMainUI() {
     }
 
     if (showHelpOverlay) {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Help & Information");
+        ImGui::Text("Help & Information");
 
         ImGui::SameLine();
 
@@ -505,73 +516,76 @@ void RenderMainUI() {
         ImGui::SetCursorPosX(rightEdge - backWidth);
 
         PushRedButtonStyle();
+        ImGui::PushFont(boldFont);
         if (ImGui::Button(backLabel)) {
             showHelpOverlay = false;
         }
+        ImGui::PopFont();
         PopButtonStyle();
 
         ImGui::Separator();
         ImGui::Spacing();
 
         float listHeight = ImGui::GetContentRegionAvail().y - BUTTON_HEIGHT; // Leave space for buttons
+        static const ImVec4 ColorText = ImVec4(0.2f, 0.7f, 0.2f, 1.0f);
         if (ImGui::BeginChild("HelpScrollRegion", ImVec2(0, listHeight), false)) {
-            ImVec4 highlightColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+            ImVec4 highlightColor = ColorText;
 
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Do not show on Taskbar:");
-            ImGui::TextWrapped("Ensures that applications in the list do not appear on the Windows taskbar.");
+            customText(boldFont, ColorText, "Do not show on Taskbar:");
+            ImGui::TextWrapped("Listed app will not appear on the Windows taskbar.");
             ImGui::Dummy(ImVec2(0, 5));
 
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Send to Tray also when Closed:");
-            ImGui::TextWrapped("Clicking the X button will minimize the application to the system tray instead of closing it.");
+            customText(boldFont, ColorText, "Send to Tray also when Closed:");
+            ImGui::TextWrapped("Clicking the X button will minimize the app to the system tray instead of closing it.");
             ImGui::Dummy(ImVec2(0, 5));
 
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "App List Rules:");
+            customText(boldFont, ColorText, "App List Rules:");
 
             ImGui::Bullet(); ImGui::Text("No extension:");
-            ImGui::SameLine(); ImGui::TextColored(highlightColor, "WhatsApp Web");
+            ImGui::SameLine(); customText(boldFont, highlightColor, "WhatsApp Web");
             ImGui::Indent(); ImGui::TextWrapped("Matches browser tab names for web apps."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("With extension:");
-            ImGui::SameLine(); ImGui::TextColored(highlightColor, "thunderbird.exe");
-            ImGui::Indent(); ImGui::TextWrapped("Matches app process names exactly as seen in Task Manager."); ImGui::Unindent();
+            ImGui::SameLine(); customText(boldFont, highlightColor, "thunderbird.exe");
+            ImGui::Indent(); ImGui::TextWrapped("Matches app process names as seen in Task Manager."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Window name:");
-            ImGui::SameLine(); ImGui::TextColored(highlightColor, "thunderbird.exe write");
+            ImGui::SameLine(); customText(boldFont, highlightColor, "thunderbird.exe Write");
             ImGui::Indent(); ImGui::TextWrapped("Optional: Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Graphical mode:");
-            ImGui::SameLine(); ImGui::TextColored(highlightColor, "Obsidian.exe w55h50");
-            ImGui::Indent(); ImGui::TextWrapped("Optional: Refines the bounding box used for Graphical mode with the given width and height in pixels."); ImGui::Unindent();
+            ImGui::SameLine(); customText(boldFont, highlightColor, "Obsidian.exe w55h50");
+            ImGui::Indent(); ImGui::TextWrapped("Optional: Refines the bounding box used for Graphical mode with the given button width and height in pixels."); ImGui::Unindent();
 
             ImGui::Dummy(ImVec2(0, 5));
 
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Modes:");
+            customText(boldFont, ColorText, "Modes:");
 
-            ImGui::Bullet(); ImGui::Text("Normal:");
+            ImGui::Bullet(); ImGui::Text("N-Normal:");
             ImGui::Indent();
-            ImGui::TextWrapped("Uses Windows API to customize closing behavior when clicking control buttons on the standard title bar.");
+            ImGui::TextWrapped("Use Windows API to efficiently customize handling behavior when clicking control buttons on the standard title bar.");
             ImGui::Unindent();
 
-            ImGui::Bullet(); ImGui::Text("Graphical:");
+            ImGui::Bullet(); ImGui::Text("G-Graphical:");
             ImGui::Indent();
-            ImGui::TextWrapped("Intercepts click positions in the top-right corner to detect control button presses. Intended for applications without standard title bars.");
+            ImGui::TextWrapped("Intercept clicks in the top-right corner to detect control button presses. Intended for applications without standard title bars.");
             ImGui::Unindent();
 
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Quick Actions:");
+            customText(boldFont, ColorText, "Quick Actions:");
 
             ImGui::Bullet(); ImGui::Text("Right-click Minimize:");
             ImGui::Indent();
-            ImGui::TextWrapped("Send the application to tray without adding it to app list.");
+            ImGui::TextWrapped("Send the app to tray without adding it to the app list.");
             ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Right-click Close:");
             ImGui::Indent();
-            ImGui::TextWrapped("Send the application to tray and permanently add it to app list.");
+            ImGui::TextWrapped("Send the app to tray and permanently add it to the app list.");
             ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Right-click Maximize:");
             ImGui::Indent();
-            ImGui::TextWrapped("Toggle always-on-top.");
+            ImGui::TextWrapped("Toggle always-on-top. This action will use PowerToys if possible.");
             ImGui::Unindent();
 
             ImGui::Dummy(ImVec2(0, 5));
@@ -580,21 +594,24 @@ void RenderMainUI() {
         ImGui::EndChild();
         ImGui::Spacing();
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.9f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+        PushGreenButtonStyle();
+        ImGui::PushFont(boldFont);
         if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
             std::thread([] {
                 ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
                 }).detach();
         }
-
+        ImGui::PopFont();
         ImGui::PopStyleColor(3);
         ImGui::End();
         return;
-    }    if (updateAvailable) {
+    }
+
+    if (updateAvailable) {
         PushGreenButtonStyle();
+        ImGui::PushFont(boldFont);
         if (ImGui::Button("Update Available", ImVec2(-1, 0))) HandleUpdateButtonClick(hwndMain);
+        ImGui::PopFont();
         PopButtonStyle();
         ImGui::Spacing();
     }
@@ -607,10 +624,12 @@ void RenderMainUI() {
     float rightEdge = ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x;
     ImGui::SetCursorPosX(rightEdge - helpTextWidth);
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushFont(boldFont);
     if (ImGui::Button(helpText)) {
         showHelpOverlay = true;
     }
+    ImGui::PopFont();
     ImGui::PopStyleColor();
     ImGui::Checkbox("Send to Tray also when Closed", &HOOKBOTH);
 
@@ -675,7 +694,7 @@ void RenderMainUI() {
                 // unselected
                 ImVec2 row_start_pos = ImGui::GetCursorScreenPos();
 
-                float textWidth = availWidth - 4 * btnWidth - 3 * spacingWidth;
+                float textWidth = availWidth - 2 * btnWidth - 3 * spacingWidth;
                 ImVec2 itemSize = ImVec2(textWidth, frameH);
                 const char* label = localCache[i].second.c_str();
 
@@ -708,7 +727,7 @@ void RenderMainUI() {
                 bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
                 if (isSpecial) {
                     PushDarkBlueButtonStyle();
-                    if (ImGui::Button("Graphical", ImVec2(btnWidth * 3, btnWidth))) {
+                    if (ImGui::Button("G", ImVec2(btnWidth, btnWidth))) {
                         specialAppNames.erase(localCache[i].first);
                         UpdateSpecialAppsList(specialAppNames);
                         MarkAppListDirty();
@@ -717,7 +736,7 @@ void RenderMainUI() {
                 }
                 else {
                     PushBlueButtonStyle();
-                    if (ImGui::Button("Normal", ImVec2(btnWidth * 3, btnWidth))) {
+                    if (ImGui::Button("N", ImVec2(btnWidth, btnWidth))) {
                         specialAppNames.insert(localCache[i].first);
                         UpdateSpecialAppsList(specialAppNames);
                         MarkAppListDirty();
@@ -775,11 +794,13 @@ void RenderMainUI() {
 
             ImGui::SameLine(0, spacingWidth);
             PushGreenButtonStyle();
+            ImGui::PushFont(boldFont);
             if (ImGui::Button("+", ImVec2(btnWidth, btnWidth))) {
                 InsertAppFromBuffer(editBuffer);
                 editBuffer[0] = '\0';
                 addingNew = false;
             }
+            ImGui::PopFont();
             PopButtonStyle();
 
             if (enterPressed) {
@@ -795,9 +816,11 @@ void RenderMainUI() {
         }
         else {
             PushGreenButtonStyle();
+            ImGui::PushFont(boldFont);
             if (ImGui::Button("+", ImVec2(MODIFY_BUTTON_WIDTH, 0))) {
                 addingNew = true; editingIndex = -1; editBuffer[0] = '\0'; requestFocusForNew = true;
             }
+            ImGui::PopFont();
             PopButtonStyle();
             ImGui::SameLine();
             ImGui::Text("Add new application");
@@ -809,12 +832,14 @@ void RenderMainUI() {
     ImGui::Spacing();
 
     PushBlueButtonStyle();
+    ImGui::PushFont(boldFont);
     if (ImGui::Button("Save Settings", ImVec2(-1, -1))) {
         SaveSettings();
         RefreshTray();
         MinimizeWindowToTray(hwndMain);
         ReinstateTaskbarState();
     }
+    ImGui::PopFont();
     PopButtonStyle();
     ImGui::End();
 }
