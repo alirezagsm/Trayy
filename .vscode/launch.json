@@ -9,8 +9,8 @@
 			"name": "Debug",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/Trayy.exe",
-			"cwd": "${workspaceFolder}",
+			"program": "Trayy.exe",
+			"cwd": "${workspaceFolder}/bin",
 			"console": "internalConsole",
 			"preLaunchTask": "Build Project Debug",
 			"internalConsoleOptions": "openOnSessionStart"
@@ -19,8 +19,8 @@
 			"name": "Release",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/Trayy.exe",
-			"cwd": "${workspaceFolder}",
+			"program": "Trayy.exe",
+			"cwd": "${workspaceFolder}/release",
 			"console": "internalConsole",
 			"preLaunchTask": "Build Project Release"
 		},
