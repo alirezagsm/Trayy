@@ -596,7 +596,7 @@ void RenderMainUI() {
 
         PushGreenButtonStyle();
         ImGui::PushFont(boldFont);
-        if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
+        if (ImGui::Button("Support the Trayy project", ImVec2(-1, -1))) {
             std::thread([] {
                 ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
                 }).detach();
