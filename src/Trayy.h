@@ -41,6 +41,7 @@
 #define SHARED_MEM_NAME L"TraySpecialApps"
 #define SHARED_MEM_SIZE (MAX_SPECIAL_APPS * MAX_PATH * sizeof(wchar_t))
 #define DLLIMPORT __declspec(dllexport)
+#define OVERLAY_CLASS_NAME L"TrayyOverlay"
 
 // Shared Memory
 typedef struct {

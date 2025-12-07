@@ -12,6 +12,7 @@
 #include <codecvt>
 #include <locale>
 #include <sstream>
+#include <tlhelp32.h>
 
 // Global variables
 UINT WM_TASKBAR_CREATED;
@@ -28,8 +29,9 @@ std::unordered_set<std::wstring> specialAppNames;
 bool HOOKBOTH = true;
 bool NOTASKBAR = false;
 bool updateAvailable = false;
+std::unordered_map<HWND, HWND> g_OverlayWindows;
 
-std::unordered_set<std::wstring> ExcludedNames = { L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
+std::unordered_set<std::wstring> ExcludedNames = { L"Cancel", L"File Upload", L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
 std::unordered_set<std::wstring> ExcludedProcesses = { L"Chrom Legacy Window", L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
 std::unordered_set<std::wstring> UseWindowName = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
 
@@ -269,17 +271,14 @@ bool MatchesAppName(HWND hwnd) {
             std::wstring processPart = words[0];
             std::wstring titlePart = words.size() > 1 ? appName.substr(appName.find(L' ') + 1) : L"";
 
-            if (originalProcessName == processPart) {
+            // Special case for Thunderbird
+            if (processPart == L"thunderbird.exe") {
                 if (titlePart.empty()) {
-                    // Special case for Thunderbird
-                    if (processPart == L"thunderbird.exe") {
-                        titlePart = L" - Mozilla Thunderbird";
-                        if (windowNameStr.find(titlePart) != std::wstring::npos) {
-                            return true;
-                        }
-                    }
-                    return true;
+                    titlePart = L" - Mozilla Thunderbird";
                 }
+            }
+
+            if (originalProcessName == processPart) {
                 if (windowNameStr.find(titlePart) != std::wstring::npos) {
                     return true;
                 }
@@ -636,10 +635,6 @@ void SaveSettings() {
     LoadSettings();
 }
 
-// Overlay Window Logic
-std::unordered_map<HWND, HWND> g_OverlayWindows;
-const wchar_t* OVERLAY_CLASS_NAME = L"TrayyOverlayWindow";
-
 LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_PAINT: {
@@ -690,6 +685,92 @@ void RegisterOverlayClass(HINSTANCE hInstance) {
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
     RegisterClassEx(&wc);
+}
+
+bool PowerToysAlwaysOnTop() {
+    // check if powertoys is running
+    HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32W pe{ sizeof(pe) };
+    bool isRunning = false;
+    for (Process32FirstW(h, &pe); Process32NextW(h, &pe);)
+        if (!_wcsicmp(pe.szExeFile, L"PowerToys.exe"))
+        {
+            CloseHandle(h);
+            isRunning = true;
+            break;
+        }
+
+    if (!isRunning) {
+        return false;
+    }
+
+    // read powertoys setting.json
+    wchar_t localAppData[MAX_PATH];
+    if (GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH) == 0) {
+        return false;
+    }
+
+    std::wstring basePath(localAppData);
+    std::wstring settingsPath = basePath + L"\\Microsoft\\PowerToys\\settings.json";
+    std::wifstream file(settingsPath);
+    if (!file) {
+        return false;
+    }
+
+    bool enabled = false;
+    std::wstring line;
+    while (std::getline(file, line)) {
+        if (line.find(L"\"AlwaysOnTop\":true") != std::wstring::npos) {
+            enabled = true;
+            break;
+        }
+    }
+    file.close();
+
+    if (!enabled) {
+        return false;
+    }
+
+    std::wstring aotSettingsPath = basePath + L"\\Microsoft\\PowerToys\\AlwaysOnTop\\settings.json";
+    file.open(aotSettingsPath);
+    if (!file) {
+        return false;
+    }
+
+    // emulate hotkeys for AOT
+    int code = 0;
+    while (std::getline(file, line)) {
+        if (line.find(L"\"win\":true") != std::wstring::npos) keybd_event(VK_LWIN, 0, 0, 0);;
+        if (line.find(L"\"ctrl\":true") != std::wstring::npos) keybd_event(VK_CONTROL, 0, 0, 0);
+        if (line.find(L"\"alt\":true") != std::wstring::npos) keybd_event(VK_MENU, 0, 0, 0);
+        if (line.find(L"\"shift\":true") != std::wstring::npos) keybd_event(VK_SHIFT, 0, 0, 0);
+
+        size_t codePos = line.find(L"\"code\":");
+        if (codePos != std::wstring::npos) {
+            try {
+                size_t start = codePos + 7;
+                size_t end = line.find_first_of(L",}", start);
+                std::wstring codeStr = line.substr(start, end - start);
+                code = std::stoi(codeStr);
+            }
+            catch (...) {
+                continue;
+            }
+        }
+
+    }
+    file.close();
+
+    keybd_event((BYTE)code, 0, 0, 0);
+
+    // release keys
+    keybd_event((BYTE)code, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+    keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
+
+    return true;
 }
 
 void AddOverlay(HWND target) {
@@ -778,6 +859,13 @@ void HandleMinimizeCommand(HWND hwnd) {
         MinimizeWindowToTray((HWND)hwnd);
     }
     else {
+        // Special case for "Cancel" browser popup windows
+        wchar_t windowName[256];
+        GetWindowText(hwnd, windowName, 256);
+        if (wcscmp(windowName, L"Cancel") == 0 && UseWindowName.count(getProcessName(hwnd))) {
+            SendMessage(hwnd, BM_CLICK, 0, 0);
+            return;
+        }
         SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
     }
 }
@@ -819,6 +907,7 @@ void HandleCloseRightClickCommand(HWND hwnd) {
 // Quick action: toggle Always on Top
 void HandleMaximizeRightClickCommand(HWND hwnd) {
     if (!IsWindow(hwnd)) return;
+    if (PowerToysAlwaysOnTop()) return;
 
     LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
     bool isTopMost = (exStyle & WS_EX_TOPMOST) != 0;
