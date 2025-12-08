@@ -521,7 +521,7 @@ void RenderMainUI() {
     }
 
     if (showHelpOverlay) {
-        ImGui::Text("Help & Information");
+        ImGui::Text("Help & Information Trayy %s", WideToUtf8(VERSION).c_str());
 
         ImGui::SameLine();
 
