@@ -10,7 +10,7 @@
 #define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
-#define VERSION L"v2.4"
+#define VERSION L"v2.41"
 #define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
