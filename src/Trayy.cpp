@@ -375,33 +375,44 @@ void RestoreWindowFromTray(HWND hwnd) {
     wchar_t windowName[256];
     GetWindowText(hwnd, windowName, 256);
     if (hwnd == hwndMain) {
-        // Mirror logic from CreateMainWindow()
-        RECT rect;
-        HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
-        if (!taskbar) {
-            // Fallback to primary monitor screen if taskbar isn't found
-            rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
-        }
-        else {
-            GetWindowRect(taskbar, &rect);
-        }
-
         // Get current window dimensions
         RECT windowRect;
         GetWindowRect(hwnd, &windowRect);
         int windowWidth = windowRect.right - windowRect.left;
         int windowHeight = windowRect.bottom - windowRect.top;
 
-        // Calculate position exactly as CreateMainWindow does
-        int x = rect.right - windowWidth - DESKTOP_PADDING;
-        int y;
-        if (rect.top == 0) {
-            // Taskbar at top
-            y = rect.bottom + DESKTOP_PADDING;
+        RECT workArea;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+        int screenW = GetSystemMetrics(SM_CXSCREEN);
+        int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+        int x, y;
+
+        // Determine taskbar position based on work area
+        if (workArea.bottom < screenH) {
+            // Taskbar at Bottom
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
+        }
+        else if (workArea.top > 0) {
+            // Taskbar at Top
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.top + DESKTOP_PADDING;
+        }
+        else if (workArea.left > 0) {
+            // Taskbar at Left
+            x = workArea.left + DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
+        }
+        else if (workArea.right < screenW) {
+            // Taskbar at Right
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
         }
         else {
-            // Taskbar at bottom
-            y = rect.top - windowHeight - DESKTOP_PADDING;
+            // Default to Bottom-Right
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
         }
 
         // Use ShowWindow to ensure WM_SHOWWINDOW is sent and timer is started

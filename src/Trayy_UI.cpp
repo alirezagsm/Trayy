@@ -55,22 +55,37 @@ static float g_scrollVelocity = 0.0f;
 // Note: hwndMain is defined in Trayy.cpp; we use the extern from Trayy.h
 
 HWND CreateMainWindow(HINSTANCE hInstance) {
-    RECT rect;
-    HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
-    if (!taskbar) {
-        // Fallback to centering on screen if taskbar isn't found
-        rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    RECT workArea;
+    SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    int x, y;
+
+    if (workArea.bottom < screenH) {
+        // Taskbar at Bottom
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
+    }
+    else if (workArea.top > 0) {
+        // Taskbar at Top
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.top + DESKTOP_PADDING;
+    }
+    else if (workArea.left > 0) {
+        // Taskbar at Left
+        x = workArea.left + DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
+    }
+    else if (workArea.right < screenW) {
+        // Taskbar at Right
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
     }
     else {
-        GetWindowRect(taskbar, &rect);
-    }
-    int x = rect.right - WINDOW_WIDTH - DESKTOP_PADDING;
-    int y;
-    if (rect.top == 0) {
-        y = rect.bottom + DESKTOP_PADDING;
-    }
-    else {
-        y = rect.top - WINDOW_HEIGHT - DESKTOP_PADDING;
+        // Default
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
     }
 
     // Create window class
