@@ -23,7 +23,7 @@ bool ActivateWindow(HWND hwnd) {
     return (GetForegroundWindow() == hwnd);
 }
 
-inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool isRightClick = false) {
+inline bool SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool isRightClick = false) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
         UINT msg = 0;
@@ -34,12 +34,15 @@ inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool i
                 msg = isMinimize ? WM_MIN_R : WM_X_R;
         }
         else {
-            if (isMaximize) return; // Default behavior for left click on maximize
+            if (isMaximize) return false; // Default behavior for left click on maximize
             msg = isMinimize ? WM_MIN : WM_X;
         }
-        if (msg)
+        if (msg) {
             PostMessage(mainWindow, msg, 0, reinterpret_cast<LPARAM>(hwnd));
+            return true;
+        }
     }
+    return false;
 }
 
 bool AccessSharedMemory() {
@@ -152,15 +155,21 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             const BOOL isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
             if (((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCRBUTTONDOWN)) && (isHitMin || isHitMax || isHitX)) {
-                _hLastHit = info->hwnd;
-                if (ActivateWindow(info->hwnd))
-                    return 1;
+                if (!isRight && isHitMax) {
+                    _hLastHit = NULL;
+                }
+                else {
+                    _hLastHit = info->hwnd;
+                    if (ActivateWindow(info->hwnd))
+                        return 1;
+                }
             }
             else if (((wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONUP)) && (isHitMin || isHitMax || isHitX)) {
                 if (info->hwnd == _hLastHit) {
-                    SendWindowAction(info->hwnd, isHitMin, isHitMax, isRight);
-                    _hLastHit = NULL;
-                    return 1;
+                    if (SendWindowAction(info->hwnd, isHitMin, isHitMax, isRight)) {
+                        _hLastHit = NULL;
+                        return 1;
+                    }
                 }
                 _hLastHit = NULL;
             }
@@ -290,9 +299,14 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             bool isRight = (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP);
             if ((wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN)) {
                 if (isHitX || isHitMin || isHitMax) {
-                    _hLastHit = hwnd;
-                    if (ActivateWindow(hwnd)) {
-                        return 1; // Consume the message
+                    if (!isRight && isHitMax) {
+                        _hLastHit = NULL;
+                    }
+                    else {
+                        _hLastHit = hwnd;
+                        if (ActivateWindow(hwnd)) {
+                            return 1; // Consume the message
+                        }
                     }
                 }
                 else {
@@ -301,9 +315,10 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             }
             else if ((wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) && hwnd == _hLastHit) {
                 if (isHitX || isHitMin || isHitMax) {
-                    SendWindowAction(hwnd, isHitMin, isHitMax, isRight);
-                    _hLastHit = NULL;
-                    return 1;
+                    if (SendWindowAction(hwnd, isHitMin, isHitMax, isRight)) {
+                        _hLastHit = NULL;
+                        return 1;
+                    }
                 }
             }
         }
