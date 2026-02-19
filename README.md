@@ -31,38 +31,33 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 1. Kick things off by downloading `Trayy.zip` and unzipping it to your desired location.
 2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Run the app to get the party started.
 
-<div style="max-width: 600px; margin: auto;">
+> [!NOTE]
+> **Security**: Your antivirus such as Windows Defender might raise a false positive due to the nature of Trayy and its hook procedure. But fear not! Trayy is harmless and fully open source, so you may inspect it for yourself at any time. ([VirusTotal report](https://www.virustotal.com/gui/file/96ac09b3d788e7b02c1afed4b866511deab00d260704221182137fcb9000b32e?nocache=1))
 
-> **Note on Security**: Your antivirus such as Windows Defender might raise a false positive due to the nature of Trayy and its hook procedure. But fear not! Trayy is harmless and fully open source, so you may inspect it for yourself at any time. ([VirusTotal report](https://www.virustotal.com/gui/file/96ac09b3d788e7b02c1afed4b866511deab00d260704221182137fcb9000b32e?nocache=1))
-
-> **For Gamers**: Be advised, Trayy might trip up some uncool anti-cheat software such as Riot Vanguard!
-
-</div>
+> [!WARNING]
+> **Gamers beware**: Trayy might trip up some uncool anti-cheat software such as Riot Vanguard!
 
 3. Time to pick your superpowers:
 
     - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
     - **Send to Tray also when Closed**: Even if you hit the X button, your app will just chill in the tray instead of closing.
 
-    Now, list out your favorite apps. Here are the rules:
+4. Now, list out your favorite apps. Here are the rules:
 
     - **No extensions** (example `WhatsApp Web`): Trayy will look for browser tab titles that contain your specified string. This is mainly intended for WebApps. Use distinctive keywords to avoid accidental matches!
     - **With extension** (example `Notepad.exe`): Match any process name as seen in Task Manager that matches your entries.
 
-    <div style="max-width: 600px; margin: auto;">
+> [!IMPORTANT]
+> **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
 
-    > **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
-
-    </div>
-
-    Assign the desired capture method:
+5. Assign the desired capture method:
 
     - **N** or `Normal`: This mode intercepts the Windows API close commands for efficient handling of clicking the control buttons with a mouse. It won't intercept other closing methods such as keyboard shortcuts.
     - **G** or `Graphical`: For pesky apps that don't use standard window controls (like `Thunderbird` and `Obsidian`), Trayy can use a special detection method by watching clicks on the top‑right of the titlebar so even tricky programs can be tucked away smoothly!
 
-    You can modify your entries with these tricks:
+6. You can modify your entries with these tricks:
 
-    - If your app has multiple windows, you can optionally control which window to target by adding the desired title name to the process name. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
+    - If your app has multiple windows, you can optionally control which window to target by adding the desired title name to your entry. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
     - For even more control, you can use ECMAScript regular expressions by prefixing your title entry with `regex:`. For example `Notepad.exe regex:^Daily Notes` will only match the titles starting with 'Daily Notes'.
     - For the Graphical mode, you can optionally modify the control button bounding box by adding the desired size in pixels to your entry like this: `Obsidian.exe w55h50`.
 
@@ -70,12 +65,16 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
   <img src="media/hitbox.png" alt="hitbox" style="height:100px; width:auto;" />
 </p>
 
-4. Hit Save and BAM! Depending on your settings, your chosen apps will now be tucked away neatly in the system tray.
 
-Tips and Tricks:
 
--   Click on a tray icon to bring its app into the spotlight. If it's already in focus, it'll sneak back into the tray. This way, you can quickly peek at your apps without breaking your workflow!
--   Quick Actions:
+    
+
+7. Hit Save and BAM! Depending on your settings, your chosen apps will now be tucked away neatly in the system tray.
+
+## ✨Tips and Tricks:
+
+-   **Take a peek**: Click on a tray icon to bring its app into the spotlight. If it's already in focus, it'll sneak back into the tray. This way, you can quickly peek at your apps without breaking your workflow!
+-   **Quick Actions**:
 
     -   **Right-click Minimize**: Send the app to tray without adding it to the app list.
     -   **Right-click Close**: Send the app to tray and permanently add it to the app list.
