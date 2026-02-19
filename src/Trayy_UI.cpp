@@ -332,13 +332,13 @@ static void PushDarkBlueButtonStyle() {
 
 static void PopButtonStyle() { ImGui::PopStyleColor(3); }
 
-static void ReplaceAppName(const std::wstring& oldName, const std::wstring& newName, bool preserveSpecialFlag) {
+static void ReplaceAppName(const std::wstring& oldName, const std::wstring& newName, bool preserveGraphicalFlag) {
     if (oldName == newName || newName.empty()) return;
-    bool wasSpecial = (specialAppNames.find(oldName) != specialAppNames.end());
+    bool wasGraphical = (graphicalAppNames.find(oldName) != graphicalAppNames.end());
     appNames.erase(oldName);
-    specialAppNames.erase(oldName);
+    graphicalAppNames.erase(oldName);
     appNames.insert(newName);
-    if (preserveSpecialFlag && wasSpecial) specialAppNames.insert(newName);
+    if (preserveGraphicalFlag && wasGraphical) graphicalAppNames.insert(newName);
     MarkAppListDirty();
 }
 
@@ -730,21 +730,21 @@ void RenderMainUI() {
                     editingIndex = i;
                     addingNew = false;
                     requestFocusForEdit = true;
-                    std::string nameWithoutSpecial = localCache[i].second;
-                    auto pos = nameWithoutSpecial.rfind(" *");
-                    if (pos != std::string::npos && pos + 2 == nameWithoutSpecial.size())
-                        nameWithoutSpecial.resize(pos);
-                    strncpy_s(editBuffer, nameWithoutSpecial.c_str(), EDIT_BUF_SZ - 1);
+                    std::string nameWithoutGraphical = localCache[i].second;
+                    auto pos = nameWithoutGraphical.rfind(" *");
+                    if (pos != std::string::npos && pos + 2 == nameWithoutGraphical.size())
+                        nameWithoutGraphical.resize(pos);
+                    strncpy_s(editBuffer, nameWithoutGraphical.c_str(), EDIT_BUF_SZ - 1);
                 }
 
                 // Draw the buttons next to the text area
                 ImGui::SameLine(0, spacingWidth);
-                bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
-                if (isSpecial) {
+                bool isGraphical = (graphicalAppNames.find(localCache[i].first) != graphicalAppNames.end());
+                if (isGraphical) {
                     PushDarkBlueButtonStyle();
                     if (ImGui::Button("G", ImVec2(btnWidth, btnWidth))) {
-                        specialAppNames.erase(localCache[i].first);
-                        UpdateSpecialAppsList(specialAppNames);
+                        graphicalAppNames.erase(localCache[i].first);
+                        UpdateSharedConfig();
                         MarkAppListDirty();
                     }
                     PopButtonStyle();
@@ -752,8 +752,8 @@ void RenderMainUI() {
                 else {
                     PushBlueButtonStyle();
                     if (ImGui::Button("N", ImVec2(btnWidth, btnWidth))) {
-                        specialAppNames.insert(localCache[i].first);
-                        UpdateSpecialAppsList(specialAppNames);
+                        graphicalAppNames.insert(localCache[i].first);
+                        UpdateSharedConfig();
                         MarkAppListDirty();
                     }
                     PopButtonStyle();
@@ -779,8 +779,8 @@ void RenderMainUI() {
                     const std::wstring& appToDelete = localCache[i].first;
                     RestoreWindowFromTray(appToDelete);
                     appNames.erase(appToDelete);
-                    specialAppNames.erase(appToDelete);
-                    UpdateSpecialAppsList(specialAppNames);
+                    graphicalAppNames.erase(appToDelete);
+                    UpdateSharedConfig();
                     MarkAppListDirty();
                     editingIndex = -1;
                     ImGui::PopID();
