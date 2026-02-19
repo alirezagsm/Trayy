@@ -93,8 +93,6 @@ void RestoreWindowFromTray(std::wstring appName);
 void InitializeUI(HINSTANCE hInstance);
 void ShowAppInterface(bool minimizeToTray);
 void ExecuteMenu();
-void HandleMinimizeCommand(HWND hwnd);
-void HandleCloseCommand(HWND hwnd);
 void HandleUpdateButtonClick(HWND hwnd);
 void SetTrayIconUpdate();
 bool InitializeImGui(HWND hwnd);
