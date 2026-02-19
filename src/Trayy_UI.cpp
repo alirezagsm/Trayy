@@ -55,22 +55,37 @@ static float g_scrollVelocity = 0.0f;
 // Note: hwndMain is defined in Trayy.cpp; we use the extern from Trayy.h
 
 HWND CreateMainWindow(HINSTANCE hInstance) {
-    RECT rect;
-    HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
-    if (!taskbar) {
-        // Fallback to centering on screen if taskbar isn't found
-        rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    RECT workArea;
+    SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    int x, y;
+
+    if (workArea.bottom < screenH) {
+        // Taskbar at Bottom
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
+    }
+    else if (workArea.top > 0) {
+        // Taskbar at Top
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.top + DESKTOP_PADDING;
+    }
+    else if (workArea.left > 0) {
+        // Taskbar at Left
+        x = workArea.left + DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
+    }
+    else if (workArea.right < screenW) {
+        // Taskbar at Right
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
     }
     else {
-        GetWindowRect(taskbar, &rect);
-    }
-    int x = rect.right - WINDOW_WIDTH - DESKTOP_PADDING;
-    int y;
-    if (rect.top == 0) {
-        y = rect.bottom + DESKTOP_PADDING;
-    }
-    else {
-        y = rect.top - WINDOW_HEIGHT - DESKTOP_PADDING;
+        // Default
+        x = workArea.right - WINDOW_WIDTH - DESKTOP_PADDING;
+        y = workArea.bottom - WINDOW_HEIGHT - DESKTOP_PADDING;
     }
 
     // Create window class
@@ -317,13 +332,13 @@ static void PushDarkBlueButtonStyle() {
 
 static void PopButtonStyle() { ImGui::PopStyleColor(3); }
 
-static void ReplaceAppName(const std::wstring& oldName, const std::wstring& newName, bool preserveSpecialFlag) {
+static void ReplaceAppName(const std::wstring& oldName, const std::wstring& newName, bool preserveGraphicalFlag) {
     if (oldName == newName || newName.empty()) return;
-    bool wasSpecial = (specialAppNames.find(oldName) != specialAppNames.end());
+    bool wasGraphical = (graphicalAppNames.find(oldName) != graphicalAppNames.end());
     appNames.erase(oldName);
-    specialAppNames.erase(oldName);
+    graphicalAppNames.erase(oldName);
     appNames.insert(newName);
-    if (preserveSpecialFlag && wasSpecial) specialAppNames.insert(newName);
+    if (preserveGraphicalFlag && wasGraphical) graphicalAppNames.insert(newName);
     MarkAppListDirty();
 }
 
@@ -506,7 +521,7 @@ void RenderMainUI() {
     }
 
     if (showHelpOverlay) {
-        ImGui::Text("Help & Information");
+        ImGui::Text("Help & Information Trayy %s", WideToUtf8(VERSION).c_str());
 
         ImGui::SameLine();
 
@@ -550,8 +565,10 @@ void RenderMainUI() {
             ImGui::Indent(); ImGui::TextWrapped("Matches app process names as seen in Task Manager."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Window name:");
-            ImGui::SameLine(); customText(boldFont, highlightColor, "thunderbird.exe Write");
+            ImGui::Indent(); customText(boldFont, highlightColor, "   thunderbird.exe Write"); ImGui::Unindent();
+            ImGui::Indent(); customText(boldFont, highlightColor, "   Notepad.exe regex:^Daily Notes"); ImGui::Unindent();
             ImGui::Indent(); ImGui::TextWrapped("Optional: Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
+            ImGui::Indent(); ImGui::TextWrapped("Optional: Use \"regex:\" prefix to match window titles with a Regular Expression."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Graphical mode:");
             ImGui::SameLine(); customText(boldFont, highlightColor, "Obsidian.exe w55h50");
@@ -596,7 +613,7 @@ void RenderMainUI() {
 
         PushGreenButtonStyle();
         ImGui::PushFont(boldFont);
-        if (ImGui::Button("Support the Trayy project", ImVec2(-1, ImGui::GetFrameHeight() * 1.4f))) {
+        if (ImGui::Button("Support the Trayy project", ImVec2(-1, -1))) {
             std::thread([] {
                 ShellExecuteA(NULL, "open", "https://github.com/alirezagsm/Trayy", NULL, NULL, SW_SHOWNORMAL);
                 }).detach();
@@ -715,21 +732,21 @@ void RenderMainUI() {
                     editingIndex = i;
                     addingNew = false;
                     requestFocusForEdit = true;
-                    std::string nameWithoutSpecial = localCache[i].second;
-                    auto pos = nameWithoutSpecial.rfind(" *");
-                    if (pos != std::string::npos && pos + 2 == nameWithoutSpecial.size())
-                        nameWithoutSpecial.resize(pos);
-                    strncpy_s(editBuffer, nameWithoutSpecial.c_str(), EDIT_BUF_SZ - 1);
+                    std::string nameWithoutGraphical = localCache[i].second;
+                    auto pos = nameWithoutGraphical.rfind(" *");
+                    if (pos != std::string::npos && pos + 2 == nameWithoutGraphical.size())
+                        nameWithoutGraphical.resize(pos);
+                    strncpy_s(editBuffer, nameWithoutGraphical.c_str(), EDIT_BUF_SZ - 1);
                 }
 
                 // Draw the buttons next to the text area
                 ImGui::SameLine(0, spacingWidth);
-                bool isSpecial = (specialAppNames.find(localCache[i].first) != specialAppNames.end());
-                if (isSpecial) {
+                bool isGraphical = (graphicalAppNames.find(localCache[i].first) != graphicalAppNames.end());
+                if (isGraphical) {
                     PushDarkBlueButtonStyle();
                     if (ImGui::Button("G", ImVec2(btnWidth, btnWidth))) {
-                        specialAppNames.erase(localCache[i].first);
-                        UpdateSpecialAppsList(specialAppNames);
+                        graphicalAppNames.erase(localCache[i].first);
+                        UpdateSharedConfig();
                         MarkAppListDirty();
                     }
                     PopButtonStyle();
@@ -737,8 +754,8 @@ void RenderMainUI() {
                 else {
                     PushBlueButtonStyle();
                     if (ImGui::Button("N", ImVec2(btnWidth, btnWidth))) {
-                        specialAppNames.insert(localCache[i].first);
-                        UpdateSpecialAppsList(specialAppNames);
+                        graphicalAppNames.insert(localCache[i].first);
+                        UpdateSharedConfig();
                         MarkAppListDirty();
                     }
                     PopButtonStyle();
@@ -764,8 +781,8 @@ void RenderMainUI() {
                     const std::wstring& appToDelete = localCache[i].first;
                     RestoreWindowFromTray(appToDelete);
                     appNames.erase(appToDelete);
-                    specialAppNames.erase(appToDelete);
-                    UpdateSpecialAppsList(specialAppNames);
+                    graphicalAppNames.erase(appToDelete);
+                    UpdateSharedConfig();
                     MarkAppListDirty();
                     editingIndex = -1;
                     ImGui::PopID();

@@ -1,13 +1,24 @@
+#define BUILD_HOOK_DLL
 #include "Trayy.h"
 #include <Shellscalingapi.h>
 #include <Psapi.h>
 #include <windowsx.h>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <unordered_set>
+#include <unordered_map>
+#include <algorithm>
+#include <set>
+#include <string_view>
+#include <regex>
 
 static HHOOK _hMouse = NULL;
 static HHOOK _hLLMouse = NULL;
 static HWND _hLastHit = NULL;
 static HANDLE _hSharedMemory = NULL;
-static SpecialAppsSharedData* _pSharedData = NULL;
+static TrayySharedConfig* _pSharedData = NULL;
+static std::unordered_map<DWORD, std::wstring> _pidCache;
 
 bool ActivateWindow(HWND hwnd) {
     if (!IsWindow(hwnd))
@@ -23,7 +34,7 @@ bool ActivateWindow(HWND hwnd) {
     return (GetForegroundWindow() == hwnd);
 }
 
-inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool isRightClick = false) {
+inline bool SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool isRightClick = false) {
     HWND mainWindow = FindWindow(NAME, NAME);
     if (mainWindow) {
         UINT msg = 0;
@@ -34,12 +45,15 @@ inline void SendWindowAction(HWND hwnd, bool isMinimize, bool isMaximize, bool i
                 msg = isMinimize ? WM_MIN_R : WM_X_R;
         }
         else {
-            if (isMaximize) return; // Default behavior for left click on maximize
+            if (isMaximize) return false; // Default behavior for left click on maximize
             msg = isMinimize ? WM_MIN : WM_X;
         }
-        if (msg)
+        if (msg) {
             PostMessage(mainWindow, msg, 0, reinterpret_cast<LPARAM>(hwnd));
+            return true;
+        }
     }
+    return false;
 }
 
 bool AccessSharedMemory() {
@@ -55,7 +69,7 @@ bool AccessSharedMemory() {
         return false;
     }
 
-    _pSharedData = (SpecialAppsSharedData*)MapViewOfFile(
+    _pSharedData = (TrayySharedConfig*)MapViewOfFile(
         _hSharedMemory,
         FILE_MAP_ALL_ACCESS,
         0,
@@ -83,57 +97,360 @@ void ReleaseSharedMemory() {
     }
 }
 
-bool IsSpecialApp(const std::wstring& processName, int& customWidth, int& customHeight) {
-    if (!AccessSharedMemory() || !_pSharedData)
-        return false;
+std::wstring getProcessName(HWND hwnd) {
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hwnd, &processId);
+    if (processId == 0) return L"";
 
-    customWidth = 0;
-    customHeight = 0;
+    auto it = _pidCache.find(processId);
+    if (it != _pidCache.end()) {
+        return it->second;
+    }
 
-    for (int i = 0; i < _pSharedData->count; i++) {
-        std::wstring specialAppEntry = _pSharedData->specialApps[i];
-        size_t firstSpace = specialAppEntry.find(L' ');
-        std::wstring appName = specialAppEntry.substr(0, firstSpace);
+    wchar_t processName[MAX_PATH] = L"";
 
-        if (_wcsicmp(appName.c_str(), processName.c_str()) == 0) {
-            size_t lastSpace = specialAppEntry.find_last_of(L' ');
-            if (lastSpace != std::wstring::npos && lastSpace + 1 < specialAppEntry.length()) {
-                std::wstring whStr = specialAppEntry.substr(lastSpace + 1);
-                if (whStr.length() > 2 && (whStr[0] == L'w' || whStr[0] == L'W')) {
-                    size_t hPos = std::wstring::npos;
-                    for (size_t j = 1; j < whStr.length(); ++j) {
-                        if (whStr[j] == L'h' || whStr[j] == L'H') {
-                            hPos = j;
-                            break;
-                        }
-                    }
-
-                    if (hPos != std::wstring::npos && hPos > 1 && hPos < whStr.length() - 1) {
-                        try {
-                            std::wstring wStr = whStr.substr(1, hPos - 1);
-                            std::wstring hStr = whStr.substr(hPos + 1);
-                            if (!wStr.empty() && !hStr.empty()) {
-                                customWidth = std::stoi(wStr);
-                                customHeight = std::stoi(hStr);
-                            }
-                        }
-                        catch (...) {
-                            // Parsing failed, treat as a normal special app
-                        }
-                    }
-                }
-            }
-            return true; // It's a special app
+    if (processId == GetCurrentProcessId()) {
+        if (GetModuleFileName(NULL, processName, MAX_PATH)) {
+            wchar_t* pName = wcsrchr(processName, L'\\');
+            std::wstring name = (pName ? pName + 1 : processName);
+            _pidCache[processId] = name;
+            return name;
         }
     }
 
-    if (processName == L"firefox.exe") // default to Graphical mode for Firefox
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (hProcess == NULL) {
+        hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+    }
+
+    if (hProcess == NULL)
+        return L"";
+
+    DWORD size = MAX_PATH;
+    if (QueryFullProcessImageName(hProcess, 0, processName, &size)) {
+        wchar_t* pName = wcsrchr(processName, L'\\');
+        std::wstring name = (pName ? pName + 1 : processName);
+        _pidCache[processId] = name;
+        CloseHandle(hProcess);
+        return name;
+    }
+
+    // fallback
+    HMODULE hMod;
+    DWORD cbNeeded;
+    if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded)) {
+        GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
+        _pidCache[processId] = processName;
+    }
+    CloseHandle(hProcess);
+    return std::wstring(processName);
+}
+
+std::wstring GetCleanAppName(const std::wstring& appName) {
+    size_t lastSpace = appName.find_last_of(L' ');
+    if (lastSpace != std::wstring::npos) {
+        std::wstring lastWord = appName.substr(lastSpace + 1);
+        if (lastWord.length() > 2 && (lastWord[0] == L'w' || lastWord[0] == L'W')) {
+            size_t hPos = std::wstring::npos;
+            for (size_t j = 1; j < lastWord.length(); ++j) {
+                if (lastWord[j] == L'h' || lastWord[j] == L'H') {
+                    hPos = j;
+                    break;
+                }
+            }
+            if (hPos != std::wstring::npos && hPos > 1 && hPos < lastWord.length() - 1) {
+                try {
+                    (void)std::stoi(lastWord.substr(1, hPos - 1));
+                    (void)std::stoi(lastWord.substr(hPos + 1));
+                    return appName.substr(0, lastSpace);
+                }
+                catch (...) {}
+            }
+        }
+    }
+    return appName;
+}
+
+bool IsExcluded(HWND hwnd, std::wstring& outProcessName, std::wstring& outWindowName) {
+    AccessSharedMemory();
+
+    wchar_t windowName[256];
+    GetWindowText(hwnd, windowName, 256);
+    outWindowName = windowName;
+
+    if (outWindowName.empty() || ExcludedNames.find(outWindowName) != ExcludedNames.end()) {
         return true;
+    }
+
+    outProcessName = getProcessName(hwnd);
+    if (outProcessName.empty()) {
+        return true;
+    }
+
+    if (ExcludedProcesses.find(outProcessName) != ExcludedProcesses.end()) {
+        return true;
+    }
+
+    HWND mainWindow = FindWindow(NAME, NAME);
+    if (hwnd == mainWindow) {
+        return true;
+    }
 
     return false;
 }
 
-// Mouse hook to handle non-client area clicks
+struct AppMatchResult {
+    int customWidth;
+    int customHeight;
+
+    AppMatchResult() : customWidth(0), customHeight(0) {}
+};
+
+static std::wstring_view TrimSpaces(std::wstring_view s) {
+    while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
+    while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
+    return s;
+}
+
+static bool EndsWithCase(std::wstring_view s, std::wstring_view suffix) {
+    if (suffix.size() > s.size()) return false;
+    return s.substr(s.size() - suffix.size()) == suffix;
+}
+
+bool ParseDimensions(std::wstring_view remainder, int& w, int& h, std::wstring_view& titlePart) {
+    if (remainder.length() >= 6) {
+        size_t hPos = remainder.find_last_of(L"hH");
+        if (hPos != std::wstring_view::npos && hPos > 2 && hPos < remainder.length() - 1) {
+            size_t wSearchEnd = hPos - 1;
+            size_t wPos = remainder.find_last_of(L"wW", wSearchEnd);
+
+            if (wPos != std::wstring_view::npos && (wPos == 0 || remainder[wPos - 1] == L' ')) {
+                try {
+                    std::wstring wStr(remainder.substr(wPos + 1, hPos - wPos - 1));
+                    std::wstring hStr(remainder.substr(hPos + 1));
+                    w = std::stoi(wStr);
+                    h = std::stoi(hStr);
+
+                    if (wPos > 0) {
+                        size_t titleEnd = wPos;
+                        while (titleEnd > 0 && remainder[titleEnd - 1] == L' ') titleEnd--;
+                        titlePart = remainder.substr(0, titleEnd);
+                    }
+                    else {
+                        titlePart = std::wstring_view();
+                    }
+                    return true;
+                }
+                catch (...) {}
+            }
+        }
+    }
+    titlePart = remainder;
+    return false;
+}
+
+
+bool CheckTitleMatch(const std::wstring& windowName, std::wstring_view titlePartRaw) {
+    std::wstring_view prefixRegex = L"regex:";
+
+    if (titlePartRaw.empty()) return true;
+
+    titlePartRaw = TrimSpaces(titlePartRaw);
+    if (titlePartRaw.empty()) return true;
+
+    auto startsWithNoCase = [](std::wstring_view s, std::wstring_view p) -> bool {
+        return (s.length() > p.length() && _wcsnicmp(s.data(), p.data(), p.length()) == 0);
+        };
+
+    if (startsWithNoCase(titlePartRaw, prefixRegex)) {
+
+        try {
+            // regex
+            std::wstring_view patternView = TrimSpaces(titlePartRaw.substr(prefixRegex.length()));
+            if (patternView.empty()) return true;
+
+            std::wstring patternStr(patternView);
+            std::wregex pattern(patternStr);
+            return std::regex_search(windowName, pattern);
+        }
+        catch (...) {
+            return false;
+        }
+    }
+
+    // exact
+    return windowName.find(titlePartRaw) != std::wstring::npos;
+}
+
+bool CheckStandardMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName) {
+    if (rawEntry[0] == L'\0') return false;
+    std::wstring_view entry(rawEntry);
+    auto trimSpaces = [](std::wstring_view s) -> std::wstring_view {
+        while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
+        while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
+        return s;
+        };
+    entry = trimSpaces(entry);
+
+    bool useWindowName = (UseWindowName.find(processName) != UseWindowName.end());
+    std::wstring matchTarget = useWindowName ? windowName : processName;
+
+    if (!useWindowName) {
+        if (entry.length() < processName.length() || _wcsnicmp(entry.data(), processName.c_str(), processName.length()) != 0)
+            return false;
+    }
+
+    std::wstring appNameEntryStr(entry);
+    std::wstring appName = GetCleanAppName(appNameEntryStr);
+
+    size_t firstSpace = appName.find(L' ');
+    std::wstring firstWord = (firstSpace == std::wstring::npos) ? appName : appName.substr(0, firstSpace);
+
+    bool firstWordHasExtension = (firstWord.find(L'.') != std::wstring::npos);
+
+    if (firstWordHasExtension) {
+        if (useWindowName) return false;
+        std::wstring titlePart = (firstSpace != std::wstring::npos) ? appName.substr(firstSpace + 1) : L"";
+        if (processName == firstWord) {
+            return CheckTitleMatch(windowName, titlePart);
+        }
+    }
+    else {
+        if (useWindowName && matchTarget.find(appName) != std::wstring::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CheckGraphicalMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName, int& customWidth, int& customHeight) {
+    if (rawEntry[0] == L'\0') return false;
+    std::wstring_view entry(rawEntry);
+    entry = TrimSpaces(entry);
+    if (entry.empty()) return false;
+
+    size_t firstSpace = entry.find(L' ');
+    std::wstring_view firstToken = (firstSpace == std::wstring_view::npos) ? entry : entry.substr(0, firstSpace);
+    const bool entryHasProcessToken = EndsWithCase(firstToken, L".exe");
+
+    std::wstring_view remainder;
+
+    if (entryHasProcessToken) {
+        if (firstToken != std::wstring_view(processName)) {
+            return false;
+        }
+
+        if (entry.length() > processName.length()) {
+            remainder = TrimSpaces(entry.substr(processName.length()));
+        }
+    }
+    else {
+        remainder = entry;
+    }
+
+    std::wstring_view titlePart = remainder;
+    int w = 0, h = 0;
+    (void)ParseDimensions(remainder, w, h, titlePart);
+
+    titlePart = TrimSpaces(titlePart);
+
+    // firefox and thunderbird checks
+    if (processName == L"firefox.exe" && titlePart.empty()) {
+        return false;
+    }
+    if (processName == L"thunderbird.exe" && titlePart.empty()) {
+        titlePart = L" - Mozilla Thunderbird";
+    }
+
+    if (!CheckTitleMatch(windowName, titlePart)) {
+        return false;
+    }
+
+    customWidth = w;
+    customHeight = h;
+    return true;
+}
+
+bool appCheckStandard(HWND hwnd, bool RClick) {
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+
+    std::wstring processName, windowName;
+    if (IsExcluded(hwnd, processName, windowName)) {
+        return false;
+    }
+
+    if (RClick) {
+        return true;
+    }
+
+    if (processName == NAME L".exe" && windowName == NAME) {
+        return true;
+    }
+
+    // exclude thunderbird and firefox
+    if (processName == L"thunderbird.exe" || processName == L"firefox.exe") {
+        return false;
+    }
+
+    for (int i = 0; i < _pSharedData->standardCount; i++) {
+        if (CheckStandardMatch(_pSharedData->standardApps[i], processName, windowName)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool appCheckGraphical(HWND hwnd, int& customWidth, int& customHeight) {
+    customWidth = 0;
+    customHeight = 0;
+
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+
+    std::wstring processName, windowName;
+    if (IsExcluded(hwnd, processName, windowName)) {
+        return false;
+    }
+    for (int i = 0; i < _pSharedData->graphicalCount; i++) {
+        int w = 0;
+        int h = 0;
+        if (CheckGraphicalMatch(_pSharedData->graphicalApps[i], processName, windowName, w, h)) {
+            customWidth = w;
+            customHeight = h;
+            return true;
+        }
+    }
+
+    // Special case for firefox and thunderbird
+    if (processName == L"firefox.exe" || processName == L"thunderbird.exe") {
+        for (int i = 0; i < _pSharedData->standardCount; i++) {
+            int w = 0;
+            int h = 0;
+            if (CheckGraphicalMatch(_pSharedData->standardApps[i], processName, windowName, w, h)) {
+                customWidth = w;
+                customHeight = h;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool DLLIMPORT appCheck(HWND hwnd, bool RClick) {
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+
+    std::wstring processName, windowName;
+    if (IsExcluded(hwnd, processName, windowName)) {
+        return false;
+    }
+
+    int customWidth = 0, customHeight = 0;
+    return appCheckGraphical(hwnd, customWidth, customHeight) || appCheckStandard(hwnd, RClick);
+}
+
 LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0)
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
@@ -142,25 +459,34 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (!info)
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
 
+    bool isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
-    // Handle left and right clicks on non-client area
+    if (!appCheckStandard(info->hwnd, isRight)) {
+        return CallNextHookEx(_hMouse, nCode, wParam, lParam);
+    }
+
     if ((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONDOWN) || (wParam == WM_NCRBUTTONUP)) {
         if (info->wHitTestCode != HTCLIENT) {
             const BOOL isHitMin = (info->wHitTestCode == HTMINBUTTON);
             const BOOL isHitMax = (info->wHitTestCode == HTMAXBUTTON);
             const BOOL isHitX = (info->wHitTestCode == HTCLOSE);
-            const BOOL isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
             if (((wParam == WM_NCLBUTTONDOWN) || (wParam == WM_NCRBUTTONDOWN)) && (isHitMin || isHitMax || isHitX)) {
-                _hLastHit = info->hwnd;
-                if (ActivateWindow(info->hwnd))
-                    return 1;
+                if (!isRight && isHitMax) {
+                    _hLastHit = NULL;
+                }
+                else {
+                    _hLastHit = info->hwnd;
+                    if (ActivateWindow(info->hwnd))
+                        return 1;
+                }
             }
             else if (((wParam == WM_NCLBUTTONUP) || (wParam == WM_NCRBUTTONUP)) && (isHitMin || isHitMax || isHitX)) {
                 if (info->hwnd == _hLastHit) {
-                    SendWindowAction(info->hwnd, isHitMin, isHitMax, isRight);
-                    _hLastHit = NULL;
-                    return 1;
+                    if (SendWindowAction(info->hwnd, isHitMin, isHitMax, isRight)) {
+                        _hLastHit = NULL;
+                        return 1;
+                    }
                 }
                 _hLastHit = NULL;
             }
@@ -176,25 +502,6 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(_hMouse, nCode, wParam, lParam);
 }
 
-std::wstring getProcessName(HWND hwnd) {
-    DWORD processId;
-    GetWindowThreadProcessId(hwnd, &processId);
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
-    if (hProcess == NULL)
-        return L"";
-
-    wchar_t processName[MAX_PATH] = L"";
-    HMODULE hMod;
-    DWORD cbNeeded;
-
-    if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
-    {
-        GetModuleBaseName(hProcess, hMod, processName, sizeof(processName) / sizeof(TCHAR));
-    }
-    CloseHandle(hProcess);
-    return std::wstring(processName);
-}
-
 float GetWindowDpiScale(HWND hwnd) {
     UINT dpiX = 96, dpiY = 96;
     HMONITOR hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -205,7 +512,12 @@ float GetWindowDpiScale(HWND hwnd) {
     return dpiY / 96.0f;
 }
 
-// Low-level Mouse hook to handle special apps
+static HWND _lastCachedHwnd = NULL;
+static bool _lastCachedResult = false;
+static int _lastCachedWidth = 0;
+static int _lastCachedHeight = 0;
+static std::wstring _lastCachedProcess;
+
 LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0)
         return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
@@ -221,102 +533,122 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if (!hwnd)
             return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
 
-        std::wstring processName = getProcessName(hwnd);
+        bool shouldProcess = false;
         int customWidth = 0, customHeight = 0;
+        std::wstring processName;
 
-        if (!processName.empty() && IsSpecialApp(processName, customWidth, customHeight)) {
-            TITLEBARINFOEX tbi;
-            tbi.cbSize = sizeof(TITLEBARINFOEX);
-            SendMessage(hwnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&tbi);
-
-            bool isHitMin = false;
-            bool isHitMax = false;
-            bool isHitX = false;
-
-            // First, try the reliable GetTitleBarInfoEx method
-            if (tbi.rgrect[2].right > tbi.rgrect[2].left && PtInRect(&tbi.rgrect[2], pt)) { // Minimize button
-                isHitMin = true;
-            }
-            if (tbi.rgrect[3].right > tbi.rgrect[3].left && PtInRect(&tbi.rgrect[3], pt)) { // Maximize button
-                isHitMax = true;
-            }
-            if (tbi.rgrect[5].right > tbi.rgrect[5].left && PtInRect(&tbi.rgrect[5], pt)) { // Close button
-                isHitX = true;
+        if (hwnd == _lastCachedHwnd && _lastCachedHwnd != NULL) {
+            shouldProcess = _lastCachedResult;
+            customWidth = _lastCachedWidth;
+            customHeight = _lastCachedHeight;
+            processName = _lastCachedProcess;
+        }
+        else {
+            shouldProcess = appCheckGraphical(hwnd, customWidth, customHeight);
+            if (shouldProcess) {
+                processName = getProcessName(hwnd);
             }
 
-            // Fallback to manual calculation if GetTitleBarInfoEx fails or for custom dimensions
-            if (!isHitMin && !isHitMax && !isHitX) {
-                RECT windowRect;
-                if (!GetWindowRect(hwnd, &windowRect))
-                    return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
+            _lastCachedHwnd = hwnd;
+            _lastCachedResult = shouldProcess;
+            _lastCachedWidth = customWidth;
+            _lastCachedHeight = customHeight;
+            _lastCachedProcess = shouldProcess ? processName : L"";
+        }
 
-                float dpiScale = GetWindowDpiScale(hwnd);
-                int windowWidth = windowRect.right - windowRect.left;
-                int relativeX = pt.x - windowRect.left;
-                int relativeY = pt.y - windowRect.top;
-                int titleBarHeight, buttonWidth;
+        if (!shouldProcess) {
+            return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
+        }
 
-                if (customWidth > 0 && customHeight > 0) {
-                    titleBarHeight = customHeight * dpiScale;
-                    buttonWidth = customWidth * dpiScale;
+        TITLEBARINFOEX tbi;
+        tbi.cbSize = sizeof(TITLEBARINFOEX);
+        DWORD_PTR result;
+        LRESULT queryResult = SendMessageTimeout(hwnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&tbi,
+            SMTO_ABORTIFHUNG | SMTO_BLOCK | SMTO_ERRORONEXIT,
+            50, &result);
+
+        bool isHitMin = false;
+        bool isHitMax = false;
+        bool isHitX = false;
+        bool useTitleBarInfo = (queryResult != 0);
+
+        if (useTitleBarInfo) {
+            if (tbi.rgrect[2].right > tbi.rgrect[2].left && PtInRect(&tbi.rgrect[2], pt)) isHitMin = true;
+            if (tbi.rgrect[3].right > tbi.rgrect[3].left && PtInRect(&tbi.rgrect[3], pt)) isHitMax = true;
+            if (tbi.rgrect[5].right > tbi.rgrect[5].left && PtInRect(&tbi.rgrect[5], pt)) isHitX = true;
+        }
+
+        if ((!isHitMin && !isHitMax && !isHitX) || (customWidth > 0)) {
+            RECT windowRect;
+            if (!GetWindowRect(hwnd, &windowRect))
+                return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
+
+            float dpiScale = GetWindowDpiScale(hwnd);
+            int windowWidth = windowRect.right - windowRect.left;
+            int relativeX = pt.x - windowRect.left;
+            int relativeY = pt.y - windowRect.top;
+            int titleBarHeight, buttonWidth;
+
+            if (customWidth > 0 && customHeight > 0) {
+                titleBarHeight = (int)(customHeight * dpiScale);
+                buttonWidth = (int)(customWidth * dpiScale);
+            }
+            else {
+                const int captionHeight = GetSystemMetrics(SM_CYCAPTION);
+                const int frameHeight = GetSystemMetrics(SM_CYFRAME);
+                const int borderPadding = GetSystemMetrics(SM_CXPADDEDBORDER);
+                float aspectRatio = 1.64f;
+                int offsetY = -12;
+                if (processName == L"thunderbird.exe") {
+                    aspectRatio = 1.5f;
+                    offsetY = -1;
                 }
-                else {
-                    const int captionHeight = GetSystemMetrics(SM_CYCAPTION);
-                    const int frameHeight = GetSystemMetrics(SM_CYFRAME);
-                    const int borderPadding = GetSystemMetrics(SM_CXPADDEDBORDER);
-                    float aspectRatio = 1.64f;
-                    int offsetY = -12;
-                    if (processName == L"thunderbird.exe") {
-                        aspectRatio = 1.5f;
-                        offsetY = -1;
-                    }
-                    titleBarHeight = (captionHeight + frameHeight + borderPadding * 2 + offsetY) * dpiScale;
-                    buttonWidth = titleBarHeight * aspectRatio;
-                }
-
-                int closeButtonLeft = windowWidth - buttonWidth;
-                int maximizeButtonLeft = closeButtonLeft - buttonWidth;
-                int minimizeButtonLeft = maximizeButtonLeft - buttonWidth;
-
-                bool isInTitleBar = (relativeY < titleBarHeight);
-                if (isInTitleBar) {
-                    isHitX = (relativeX >= closeButtonLeft);
-                    isHitMax = (relativeX >= maximizeButtonLeft) && (relativeX < closeButtonLeft);
-                    isHitMin = (relativeX >= minimizeButtonLeft) && (relativeX < maximizeButtonLeft);
-                }
+                titleBarHeight = (int)((captionHeight + frameHeight + borderPadding * 2 + offsetY) * dpiScale);
+                buttonWidth = (int)(titleBarHeight * aspectRatio);
             }
 
-            // Handle button clicks for special apps
-            bool isRight = (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP);
-            if ((wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN)) {
-                if (isHitX || isHitMin || isHitMax) {
-                    _hLastHit = hwnd;
-                    if (ActivateWindow(hwnd)) {
-                        return 1; // Consume the message
-                    }
-                }
-                else {
+            int closeButtonLeft = windowWidth - buttonWidth;
+            int maximizeButtonLeft = closeButtonLeft - buttonWidth;
+            int minimizeButtonLeft = maximizeButtonLeft - buttonWidth;
+
+            if (relativeY < titleBarHeight) {
+                if (relativeX >= closeButtonLeft) isHitX = true;
+                else if (relativeX >= maximizeButtonLeft) isHitMax = true;
+                else if (relativeX >= minimizeButtonLeft) isHitMin = true;
+            }
+        }
+
+        bool isRight = (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP);
+        bool isDown = (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN);
+        bool isUp = (wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP);
+
+        if (isHitX || isHitMin || isHitMax) {
+            if (isDown) {
+                if (!isRight && isHitMax) {
                     _hLastHit = NULL;
                 }
+                else {
+                    _hLastHit = hwnd;
+                    if (ActivateWindow(hwnd)) return 1;
+                }
             }
-            else if ((wParam == WM_LBUTTONUP || wParam == WM_RBUTTONUP) && hwnd == _hLastHit) {
-                if (isHitX || isHitMin || isHitMax) {
-                    SendWindowAction(hwnd, isHitMin, isHitMax, isRight);
+            else if (isUp && hwnd == _hLastHit) {
+                if (SendWindowAction(hwnd, isHitMin, isHitMax, isRight)) {
                     _hLastHit = NULL;
                     return 1;
                 }
+                _hLastHit = NULL;
             }
         }
-    }
-    else if (wParam == WM_RBUTTONUP) {
-        _hLastHit = NULL;
+        else if (isUp) {
+            if (hwnd == _hLastHit) _hLastHit = NULL;
+        }
     }
 
     return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
 }
 
 BOOL DLLIMPORT RegisterHook(HMODULE hLib) {
-    // Set DPI awareness
     if (FAILED(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE))) {
         SetProcessDPIAware();
     }

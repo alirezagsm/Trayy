@@ -14,7 +14,6 @@
 #include <sstream>
 #include <tlhelp32.h>
 
-// Global variables
 UINT WM_TASKBAR_CREATED;
 HWINEVENTHOOK hEventHook;
 HWINEVENTHOOK hLocationHook;
@@ -25,23 +24,17 @@ HWND hwndMain;
 HWND hwndItems[MAXTRAYITEMS];
 HWND hwndForMenu;
 std::unordered_set<std::wstring> appNames;
-std::unordered_set<std::wstring> specialAppNames;
+std::unordered_set<std::wstring> graphicalAppNames;
 bool HOOKBOTH = true;
 bool NOTASKBAR = false;
 bool updateAvailable = false;
 std::unordered_map<HWND, HWND> g_OverlayWindows;
 
-std::unordered_set<std::wstring> ExcludedNames = { L"Cancel", L"File Upload", L"ApplicationFrameHost.exe", L"MSCTFIME UI", L"Default IME", L"EVR Fullscreen Window" };
-std::unordered_set<std::wstring> ExcludedProcesses = { L"Chrom Legacy Window", L"Explorer.EXE", L"SearchHost.exe", L"svchost.exe", L"taskhostw.exe", L"OneDrive.exe", L"TextInputHost.exe", L"SystemSettings.exe", L"RuntimeBroker.exe", L"SearchUI.exe", L"ShellExperienceHost.exe", L"msedgewebview2.exe", L"pwahelper.exe", L"conhost.exe", L"VCTIP.EXE", L"GameBarFTServer.exe" };
-std::unordered_set<std::wstring> UseWindowName = { L"chrome.exe", L"firefox.exe", L"opera.exe", L"msedge.exe", L"iexplore.exe", L"brave.exe", L"vivaldi.exe", L"chromium.exe" };
-
-// Shared memory variables
 HANDLE hSharedMemory = NULL;
-SpecialAppsSharedData* pSharedData = NULL;
+TrayySharedConfig* pSharedData = NULL;
 
-// Shared memory functions
+
 BOOL InitializeSharedMemory() {
-    // Create shared memory
     hSharedMemory = CreateFileMapping(
         INVALID_HANDLE_VALUE,
         NULL,
@@ -54,8 +47,7 @@ BOOL InitializeSharedMemory() {
         return FALSE;
     }
 
-    // Map view of file
-    pSharedData = (SpecialAppsSharedData*)MapViewOfFile(
+    pSharedData = (TrayySharedConfig*)MapViewOfFile(
         hSharedMemory,
         FILE_MAP_ALL_ACCESS,
         0,
@@ -69,7 +61,7 @@ BOOL InitializeSharedMemory() {
     }
 
     // Initialize
-    pSharedData->count = 0;
+    ZeroMemory(pSharedData, SHARED_MEM_SIZE);
 
     return TRUE;
 }
@@ -86,21 +78,32 @@ void CleanupSharedMemory() {
     }
 }
 
-BOOL UpdateSpecialAppsList(const std::unordered_set<std::wstring>& specialApps) {
+BOOL UpdateSharedConfig() {
     if (!pSharedData)
         return FALSE;
 
-    // Clear existing data
     ZeroMemory(pSharedData, SHARED_MEM_SIZE);
 
-    // Update count and app names
+    pSharedData->hookBoth = HOOKBOTH;
+    pSharedData->noTaskbar = NOTASKBAR;
+
+    // Update graphical apps
     int idx = 0;
-    for (const auto& app : specialApps) {
+    for (const auto& app : graphicalAppNames) {
         if (idx >= MAX_SPECIAL_APPS) break;
-        wcscpy_s(pSharedData->specialApps[idx], MAX_PATH, app.c_str());
+        wcscpy_s(pSharedData->graphicalApps[idx], MAX_PATH, app.c_str());
         idx++;
     }
-    pSharedData->count = idx;
+    pSharedData->graphicalCount = idx;
+
+    // Update standard apps
+    idx = 0;
+    for (const auto& app : appNames) {
+        if (idx >= MAX_APPS) break;
+        wcscpy_s(pSharedData->standardApps[idx], MAX_PATH, app.c_str());
+        idx++;
+    }
+    pSharedData->standardCount = idx;
 
     return TRUE;
 }
@@ -230,75 +233,7 @@ std::wstring GetCleanAppName(const std::wstring& appName) {
     return appName;
 }
 
-bool MatchesAppName(HWND hwnd) {
-    std::wstring originalProcessName = getProcessName(hwnd);
-    std::wstring processName = originalProcessName;
-    wchar_t windowName[256];
-    GetWindowText(hwnd, windowName, 256);
-    std::wstring windowNameStr(windowName);
 
-    bool switchedProcessNametoWindowName = false;
-    if (UseWindowName.find(originalProcessName) != UseWindowName.end()) {
-        processName = windowNameStr;
-        switchedProcessNametoWindowName = true;
-    }
-
-    for (auto appName : appNames) {
-        if (appName.empty()) {
-            continue;
-        }
-
-        appName = GetCleanAppName(appName);
-
-        std::wistringstream iss(appName);
-        std::wstring word;
-        std::vector<std::wstring> words;
-
-        while (iss >> word) {
-            words.push_back(word);
-        }
-
-        if (words.empty()) {
-            continue;
-        }
-
-        bool firstWordHasExtension = words[0].find(L'.') != std::wstring::npos;
-        if (firstWordHasExtension) {
-            if (switchedProcessNametoWindowName) {
-                continue;
-            }
-
-            std::wstring processPart = words[0];
-            std::wstring titlePart = words.size() > 1 ? appName.substr(appName.find(L' ') + 1) : L"";
-
-            // Special case for Thunderbird
-            if (processPart == L"thunderbird.exe") {
-                if (titlePart.empty()) {
-                    titlePart = L" - Mozilla Thunderbird";
-                }
-            }
-
-            if (originalProcessName == processPart) {
-                if (windowNameStr.find(titlePart) != std::wstring::npos) {
-                    return true;
-                }
-            }
-        }
-        else {
-            if (switchedProcessNametoWindowName) {
-                if (processName.find(appName) != std::wstring::npos) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    if (originalProcessName == NAME L".exe" && windowNameStr == NAME) {
-        return true;
-    }
-
-    return false;
-}
 
 bool RemoveWindowFromTray(HWND hwnd) {
     int i = FindInTray(hwnd);
@@ -328,7 +263,7 @@ void RefreshWindowInTray(HWND hwnd) {
         return;
     }
 
-    if (!MatchesAppName(hwnd) && IsWindowVisible(hwnd)) {
+    if (!appCheck(hwnd) && IsWindowVisible(hwnd)) {
         RemoveWindowFromTray(hwnd);
         return;
     }
@@ -375,38 +310,47 @@ void RestoreWindowFromTray(HWND hwnd) {
     wchar_t windowName[256];
     GetWindowText(hwnd, windowName, 256);
     if (hwnd == hwndMain) {
-        // Mirror logic from CreateMainWindow()
-        RECT rect;
-        HWND taskbar = FindWindow(L"Shell_traywnd", NULL);
-        if (!taskbar) {
-            // Fallback to primary monitor screen if taskbar isn't found
-            rect = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
-        }
-        else {
-            GetWindowRect(taskbar, &rect);
-        }
-
         // Get current window dimensions
         RECT windowRect;
         GetWindowRect(hwnd, &windowRect);
         int windowWidth = windowRect.right - windowRect.left;
         int windowHeight = windowRect.bottom - windowRect.top;
 
-        // Calculate position exactly as CreateMainWindow does
-        int x = rect.right - windowWidth - DESKTOP_PADDING;
-        int y;
-        if (rect.top == 0) {
-            // Taskbar at top
-            y = rect.bottom + DESKTOP_PADDING;
+        RECT workArea;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+        int screenW = GetSystemMetrics(SM_CXSCREEN);
+        int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+        int x, y;
+
+        // Determine taskbar position based on work area
+        if (workArea.bottom < screenH) {
+            // Taskbar at Bottom
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
+        }
+        else if (workArea.top > 0) {
+            // Taskbar at Top
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.top + DESKTOP_PADDING;
+        }
+        else if (workArea.left > 0) {
+            // Taskbar at Left
+            x = workArea.left + DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
+        }
+        else if (workArea.right < screenW) {
+            // Taskbar at Right
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
         }
         else {
-            // Taskbar at bottom
-            y = rect.top - windowHeight - DESKTOP_PADDING;
+            // Default to Bottom-Right
+            x = workArea.right - windowWidth - DESKTOP_PADDING;
+            y = workArea.bottom - windowHeight - DESKTOP_PADDING;
         }
 
-        // Use ShowWindow to ensure WM_SHOWWINDOW is sent and timer is started
         ShowWindow(hwnd, SW_SHOW);
-        // Explicitly position and show the window
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0,
             SWP_NOSIZE | SWP_SHOWWINDOW);
         SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
@@ -429,7 +373,7 @@ void RestoreWindowFromTray(HWND hwnd) {
     }
 
     // If app is no longer in app list
-    if (MatchesAppName(hwnd) == false) {
+    if (appCheck(hwnd) == false) {
         SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, 0);
     }
 }
@@ -473,40 +417,7 @@ void CloseWindowFromTray(HWND hwnd) {
     }
 }
 
-bool appCheck(HWND hwnd, bool RClick) {
-    wchar_t windowName[256];
-    GetWindowText(hwnd, windowName, 256);
 
-    if (wcslen(windowName) == 0) {
-        return false;
-    }
-
-    // Excluded window names
-    std::wstring windowNameStr(windowName);
-    if (ExcludedNames.find(windowNameStr) != ExcludedNames.end()) {
-        return false;
-    }
-
-    std::wstring processName = getProcessName(hwnd);
-    if (processName.empty()) {
-        return false;
-    }
-
-    // Excluded processes
-    if (ExcludedProcesses.find(processName) != ExcludedProcesses.end()) {
-        return false;
-    }
-
-    if (hwnd == hwndMain) {
-        return false;
-    }
-
-    if (RClick) {
-        return true;
-    }
-
-    return MatchesAppName(hwnd);
-}
 
 void MinimizeAll() {
     HWND hwnd = GetTopWindow(NULL);
@@ -516,28 +427,6 @@ void MinimizeAll() {
         }
         hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
     }
-}
-
-BOOL CALLBACK EnumChildProc(HWND hwnd, LPARAM lParam) {
-    char className[256];
-    GetClassNameA(hwnd, className, sizeof(className));
-    if (strcmp(className, "TrayNotifyWnd") == 0) {
-        EnumChildWindows(hwnd, EnumChildProc, lParam);
-    }
-    else if (strcmp(className, "SysPager") == 0) {
-        EnumChildWindows(hwnd, EnumChildProc, lParam);
-    }
-    else if (strcmp(className, "ToolbarWindow32") == 0) {
-        RECT r;
-        GetClientRect(hwnd, &r);
-        for (LONG x = 0; x < r.right; x += 5) {
-            for (LONG y = 0; y < r.bottom; y += 5) {
-                LPARAM lParam = MAKELPARAM(x, y);
-                SendMessage(hwnd, WM_MOUSEMOVE, 0, lParam);
-            }
-        }
-    }
-    return TRUE;
 }
 
 bool IsTopWindow(HWND hwnd) {
@@ -569,9 +458,12 @@ void MinimizeAllInBackground() {
     t.detach();
 }
 
+
+
+
 void LoadSettings() {
     appNames.clear();
-    specialAppNames.clear();
+    graphicalAppNames.clear();
     std::wifstream file(SETTINGS_FILE);
     file.imbue(std::locale(file.getloc(),
         new std::codecvt_utf8<wchar_t, 0x10ffff, std::generate_header>));
@@ -590,11 +482,11 @@ void LoadSettings() {
             NOTASKBAR = line.find(L"true") != std::string::npos;
             while (std::getline(file, line)) {
                 if (!line.empty()) {
-                    // If line begins with '*' it's a graphical (special) app; store without the '*'
+                    // If line begins with '*' it's a graphical (graphical) app; store without the '*'
                     if (line[0] == L'*') {
                         std::wstring baseName = line.substr(1);
                         appNames.insert(baseName);
-                        specialAppNames.insert(baseName);
+                        graphicalAppNames.insert(baseName);
                     }
                     else {
                         appNames.insert(line);
@@ -602,7 +494,7 @@ void LoadSettings() {
                 }
             }
             file.close();
-            UpdateSpecialAppsList(specialAppNames);
+            UpdateSharedConfig();
         }
         catch (const std::exception&) {
             std::wstring backupFile = SETTINGS_FILE L".bak";
@@ -610,6 +502,7 @@ void LoadSettings() {
             std::wofstream file(SETTINGS_FILE, std::ios::out | std::ios::trunc);
             file << L"HOOKBOTH " << (HOOKBOTH ? L"true" : L"false") << std::endl;
             file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
+            UpdateSharedConfig();
         }
     }
     // Notify ImGui that the app list has changed
@@ -624,7 +517,7 @@ void SaveSettings() {
     file << L"NOTASKBAR " << (NOTASKBAR ? L"true" : L"false") << std::endl;
 
     for (const auto& appName : appNames) {
-        if (specialAppNames.find(appName) != specialAppNames.end()) {
+        if (graphicalAppNames.find(appName) != graphicalAppNames.end()) {
             file << L"*" << appName << std::endl;
         }
         else {
@@ -854,53 +747,13 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
     }
 }
 
-void HandleMinimizeCommand(HWND hwnd) {
-    if (appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-    else {
-        // Special case for "Cancel" browser popup windows
-        wchar_t windowName[256];
-        GetWindowText(hwnd, windowName, 256);
-        if (wcscmp(windowName, L"Cancel") == 0 && UseWindowName.count(getProcessName(hwnd))) {
-            SendMessage(hwnd, BM_CLICK, 0, 0);
-            return;
-        }
-        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_MINIMIZE, 0);
-    }
-}
-
-void HandleCloseCommand(HWND hwnd) {
-    if (HOOKBOTH && appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-    else {
-        SendMessage(GetForegroundWindow(), WM_SYSCOMMAND, SC_CLOSE, 0);
-        PostMessage(hwnd, WM_SYSCOMMAND, SC_CLOSE, 0);
-    }
-}
-
-// Quick action: temporarily minimize to Tray
-void HandleMinimizeRightClickCommand(HWND hwnd) {
-    if (appCheck(hwnd, true)) {
-        MinimizeWindowToTray(hwnd);
-    }
-}
-
 // Quick action: save app to appNames and settings
 void HandleCloseRightClickCommand(HWND hwnd) {
-    if (!appCheck(hwnd, true)) {
-        return;
-    }
-    if (MatchesAppName(hwnd)) {
-        return;
-    }
-
     std::wstring processName = getProcessName(hwnd);
-    size_t extPos = processName.rfind(L'.');
-
-    appNames.insert(processName);
-    SaveSettings();
+    if (appNames.find(processName) == appNames.end()) {
+        appNames.insert(processName);
+        SaveSettings();
+    }
     MinimizeWindowToTray(hwnd);
 }
 
@@ -984,13 +837,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
     case WM_MIN:
-        HandleMinimizeCommand((HWND)lParam);
+        MinimizeWindowToTray((HWND)lParam);
         break;
     case WM_X:
-        HandleCloseCommand((HWND)lParam);
+        if (HOOKBOTH) {
+            MinimizeWindowToTray((HWND)lParam);
+        }
         break;
     case WM_MIN_R:
-        HandleMinimizeRightClickCommand((HWND)lParam);
+        MinimizeWindowToTray((HWND)lParam);
         break;
     case WM_X_R:
         HandleCloseRightClickCommand((HWND)lParam);
