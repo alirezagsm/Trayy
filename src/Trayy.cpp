@@ -14,7 +14,6 @@
 #include <sstream>
 #include <tlhelp32.h>
 
-// Global variables
 UINT WM_TASKBAR_CREATED;
 HWINEVENTHOOK hEventHook;
 HWINEVENTHOOK hLocationHook;
@@ -748,43 +747,13 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd, 
     }
 }
 
-void HandleMinimizeCommand(HWND hwnd) {
-    if (appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-}
-
-void HandleCloseCommand(HWND hwnd) {
-    // std::wstring processName = getProcessName((HWND)hwnd);
-    // wchar_t windowName[256];
-    // GetWindowText((HWND)hwnd, windowName, 256);
-
-    if (HOOKBOTH && appCheck((HWND)hwnd)) {
-        MinimizeWindowToTray((HWND)hwnd);
-    }
-}
-
-// Quick action: temporarily minimize to Tray
-void HandleMinimizeRightClickCommand(HWND hwnd) {
-    if (appCheck(hwnd, true)) {
-        MinimizeWindowToTray(hwnd);
-    }
-}
-
 // Quick action: save app to appNames and settings
 void HandleCloseRightClickCommand(HWND hwnd) {
-    if (!appCheck(hwnd, true)) {
-        return;
-    }
-    if (appCheck(hwnd)) {
-        return;
-    }
-
     std::wstring processName = getProcessName(hwnd);
-    size_t extPos = processName.rfind(L'.');
-
-    appNames.insert(processName);
-    SaveSettings();
+    if (appNames.find(processName) == appNames.end()) {
+        appNames.insert(processName);
+        SaveSettings();
+    }
     MinimizeWindowToTray(hwnd);
 }
 
@@ -868,13 +837,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
     case WM_MIN:
-        HandleMinimizeCommand((HWND)lParam);
+        MinimizeWindowToTray((HWND)lParam);
         break;
     case WM_X:
-        HandleCloseCommand((HWND)lParam);
+        if (HOOKBOTH) {
+            MinimizeWindowToTray((HWND)lParam);
+        }
         break;
     case WM_MIN_R:
-        HandleMinimizeRightClickCommand((HWND)lParam);
+        MinimizeWindowToTray((HWND)lParam);
         break;
     case WM_X_R:
         HandleCloseRightClickCommand((HWND)lParam);
