@@ -152,7 +152,14 @@
 			"label": "Build hook obj",
 			"type": "cppbuild",
 			"command": "cl",
-			"args": ["/c", "/nologo", "/EHsc", "/Fo:bin/", "src/hook.cpp"],
+			"args": [
+				"/c",
+				"/nologo",
+				"/EHsc",
+				"/std:c++17",
+				"/Fo:bin/",
+				"src/hook.cpp"
+			],
 			"dependsOn": ["Build res"],
 			"dependsOrder": "sequence",
 			"problemMatcher": ["$msCompile"]
