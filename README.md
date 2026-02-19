@@ -29,7 +29,16 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
 ## 🚀 Getting Started
 
 1. Kick things off by downloading `Trayy.zip` and unzipping it to your desired location.
-2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Now, Windows Defender might raise a false positive but fear not! Trayy is harmless and also open source ([VirusTotal report](https://www.virustotal.com/gui/file/ee5a61ea639532c625faf2a2be0268b8b69231df52bce514772fc2418e9d5fda?nocache=1)). Run the app to get the party started.
+2. Make sure `Trayy.exe` and `hook.dll` are hanging out in the same folder. Run the app to get the party started.
+
+<div style="max-width: 600px; margin: auto;">
+
+> **Note on Security**: Your antivirus such as Windows Defender might raise a false positive due to the nature of Trayy and its hook procedure. But fear not! Trayy is harmless and fully open source, so you may inspect it for yourself at any time. ([VirusTotal report](https://www.virustotal.com/gui/file/96ac09b3d788e7b02c1afed4b866511deab00d260704221182137fcb9000b32e?nocache=1))
+
+> **For Gamers**: Be advised, Trayy might trip up some uncool anti-cheat software such as Riot Vanguard!
+
+</div>
+
 3. Time to pick your superpowers:
 
     - **Do not show on Taskbar**: Your app will become the ultimate hide-and-seek champion, staying off the taskbar completely.
@@ -38,8 +47,13 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
     Now, list out your favorite apps. Here are the rules:
 
     - **No extensions** (example `WhatsApp Web`): Trayy will look for browser tab titles that contain your specified string. This is mainly intended for WebApps. Use distinctive keywords to avoid accidental matches!
-    - **With extension** (example `Notepad.exe`): Match any process name as seen in Task Manager that match your entries.
-    - **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
+    - **With extension** (example `Notepad.exe`): Match any process name as seen in Task Manager that matches your entries.
+
+    <div style="max-width: 600px; margin: auto;">
+
+    > **Heads up:** Universal Windows Platform (UWP) apps (like those from the Microsoft Store) like to do their own thing and aren’t supported by Trayy.
+
+    </div>
 
     Assign the desired capture method:
 
@@ -49,6 +63,7 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
     You can modify your entries with these tricks:
 
     - If your app has multiple windows, you can optionally control which window to target by adding the desired title name to the process name. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
+    - For even more control, you can use regular expressions by prefixing your title entry with `regex:`. For example `Notepad.exe regex:^Daily Notes` will only match the titles starting with 'Daily Notes'. 
     - For the Graphical mode, you can optionally modify the control button bounding box by adding the desired size in pixels to your entry like this: `Obsidian.exe w55h50`.
 
 <p align="center">
@@ -87,7 +102,6 @@ Tips and Tricks:
     ```
 
 -   **Startup**: Let Trayy join your startup squad! Add Trayy's shortcut to your `shell:startup` folder, along with all your other favorite apps you want to keep tucked away in the system tray. For WebApps, you can ask your browser to add their shortcuts to your Desktop. Then, simply move those shortcuts into the startup folder. Trayy will chill for a bit, letting the startup process finish, then swoop in to tidy everything up! It's a game changer for messaging and productivity apps!
--   **Note**: Trayy might trip up some uncool anti-cheat software such as Riot Vanguard!
 
 ## 😊 Acknowledgements
 
