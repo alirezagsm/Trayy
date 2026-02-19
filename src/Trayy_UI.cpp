@@ -565,8 +565,10 @@ void RenderMainUI() {
             ImGui::Indent(); ImGui::TextWrapped("Matches app process names as seen in Task Manager."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Window name:");
-            ImGui::SameLine(); customText(boldFont, highlightColor, "thunderbird.exe Write");
+            ImGui::Indent(); customText(boldFont, highlightColor, "   thunderbird.exe Write"); ImGui::Unindent();
+            ImGui::Indent(); customText(boldFont, highlightColor, "   Notepad.exe regex:^Daily Notes"); ImGui::Unindent();
             ImGui::Indent(); ImGui::TextWrapped("Optional: Targets only app windows with the specific provided title for the given process."); ImGui::Unindent();
+            ImGui::Indent(); ImGui::TextWrapped("Optional: Use \"regex:\" prefix to match window titles with a Regular Expression."); ImGui::Unindent();
 
             ImGui::Bullet(); ImGui::Text("Graphical mode:");
             ImGui::SameLine(); customText(boldFont, highlightColor, "Obsidian.exe w55h50");

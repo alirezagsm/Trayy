@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <set>
 #include <string_view>
+#include <regex>
 
 static HHOOK _hMouse = NULL;
 static HHOOK _hLLMouse = NULL;
@@ -238,10 +239,64 @@ bool ParseDimensions(std::wstring_view remainder, int& w, int& h, std::wstring_v
     return false;
 }
 
+
+bool CheckTitleMatch(const std::wstring& windowName, std::wstring_view titlePartRaw) {
+    std::wstring_view prefixRegex = L"regex:";
+
+    if (titlePartRaw.empty()) return true;
+
+    auto trimSpaces = [](std::wstring_view s) -> std::wstring_view {
+        while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
+        while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
+        return s;
+        };
+
+    titlePartRaw = trimSpaces(titlePartRaw);
+    if (titlePartRaw.empty()) return true;
+
+    auto startsWithNoCase = [](std::wstring_view s, std::wstring_view p) -> bool {
+        return (s.length() > p.length() && _wcsnicmp(s.data(), p.data(), p.length()) == 0);
+        };
+
+    if (startsWithNoCase(titlePartRaw, prefixRegex)) {
+
+        try {
+            // regex
+            std::wstring_view patternView = trimSpaces(titlePartRaw.substr(prefixRegex.length()));
+            if (patternView.empty()) return true;
+
+            std::wstring patternStr(patternView);
+            std::wregex pattern(patternStr);
+            return std::regex_search(windowName, pattern);
+        }
+        catch (...) {
+            return false;
+        }
+    }
+
+    // exact (case-sensitive substring)
+    return windowName.find(titlePartRaw) != std::wstring::npos;
+}
+
 bool CheckAppMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName, bool isStandard, AppMatchResult& result) {
     if (rawEntry[0] == L'\0') return false;
 
     std::wstring_view entry(rawEntry);
+
+    auto trimSpaces = [](std::wstring_view s) -> std::wstring_view {
+        while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
+        while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
+        return s;
+        };
+
+    entry = trimSpaces(entry);
+
+    // Be forgiving if the user accidentally prefixes the whole line.
+    // Expected syntax is: "<process>.exe [titlePart|regex:<pattern>]".
+    std::wstring_view prefixRegex = L"regex:";
+    if (entry.length() > prefixRegex.length() && _wcsnicmp(entry.data(), prefixRegex.data(), prefixRegex.length()) == 0) {
+        entry = trimSpaces(entry.substr(prefixRegex.length()));
+    }
 
     if (isStandard) {
         bool useWindowName = (UseWindowName.find(processName) != UseWindowName.end());
@@ -273,7 +328,7 @@ bool CheckAppMatch(const wchar_t* rawEntry, const std::wstring& processName, con
             }
 
             if (processName == firstWord) {
-                if (windowName.find(titlePart) != std::wstring::npos) {
+                if (CheckTitleMatch(windowName, titlePart)) {
                     result.matched = true;
                     return true;
                 }
@@ -316,10 +371,8 @@ bool CheckAppMatch(const wchar_t* rawEntry, const std::wstring& processName, con
         result.customHeight = h;
     }
 
-    if (!titlePart.empty()) {
-        if (windowName.find(std::wstring(titlePart)) == std::wstring::npos) {
-            return false;
-        }
+    if (!CheckTitleMatch(windowName, titlePart)) {
+        return false;
     }
 
     result.matched = true;
