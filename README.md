@@ -63,7 +63,7 @@ Ever wished you could tell some apps to chill in the system tray? </br>Say hello
     You can modify your entries with these tricks:
 
     - If your app has multiple windows, you can optionally control which window to target by adding the desired title name to the process name. For example `thunderbird.exe Write` will capture the email compose window specifically. This is also handy to avoid unwanted capture of hidden windows.
-    - For even more control, you can use regular expressions by prefixing your title entry with `regex:`. For example `Notepad.exe regex:^Daily Notes` will only match the titles starting with 'Daily Notes'. 
+    - For even more control, you can use ECMAScript style regular expressions by prefixing your title entry with `regex:`. For example `Notepad.exe regex:^Daily Notes` will only match the titles starting with 'Daily Notes'.
     - For the Graphical mode, you can optionally modify the control button bounding box by adding the desired size in pixels to your entry like this: `Obsidian.exe w55h50`.
 
 <p align="center">
