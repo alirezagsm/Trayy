@@ -200,12 +200,22 @@ bool IsExcluded(HWND hwnd, std::wstring& outProcessName, std::wstring& outWindow
 }
 
 struct AppMatchResult {
-    bool matched;
     int customWidth;
     int customHeight;
 
-    AppMatchResult() : matched(false), customWidth(0), customHeight(0) {}
+    AppMatchResult() : customWidth(0), customHeight(0) {}
 };
+
+static std::wstring_view TrimSpaces(std::wstring_view s) {
+    while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
+    while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
+    return s;
+}
+
+static bool EndsWithCase(std::wstring_view s, std::wstring_view suffix) {
+    if (suffix.size() > s.size()) return false;
+    return s.substr(s.size() - suffix.size()) == suffix;
+}
 
 bool ParseDimensions(std::wstring_view remainder, int& w, int& h, std::wstring_view& titlePart) {
     if (remainder.length() >= 6) {
@@ -245,13 +255,7 @@ bool CheckTitleMatch(const std::wstring& windowName, std::wstring_view titlePart
 
     if (titlePartRaw.empty()) return true;
 
-    auto trimSpaces = [](std::wstring_view s) -> std::wstring_view {
-        while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
-        while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
-        return s;
-        };
-
-    titlePartRaw = trimSpaces(titlePartRaw);
+    titlePartRaw = TrimSpaces(titlePartRaw);
     if (titlePartRaw.empty()) return true;
 
     auto startsWithNoCase = [](std::wstring_view s, std::wstring_view p) -> bool {
@@ -262,7 +266,7 @@ bool CheckTitleMatch(const std::wstring& windowName, std::wstring_view titlePart
 
         try {
             // regex
-            std::wstring_view patternView = trimSpaces(titlePartRaw.substr(prefixRegex.length()));
+            std::wstring_view patternView = TrimSpaces(titlePartRaw.substr(prefixRegex.length()));
             if (patternView.empty()) return true;
 
             std::wstring patternStr(patternView);
@@ -274,143 +278,100 @@ bool CheckTitleMatch(const std::wstring& windowName, std::wstring_view titlePart
         }
     }
 
-    // exact (case-sensitive substring)
+    // exact
     return windowName.find(titlePartRaw) != std::wstring::npos;
 }
 
-bool CheckAppMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName, bool isStandard, AppMatchResult& result) {
+bool CheckStandardMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName) {
     if (rawEntry[0] == L'\0') return false;
-
     std::wstring_view entry(rawEntry);
-
     auto trimSpaces = [](std::wstring_view s) -> std::wstring_view {
         while (!s.empty() && s.front() == L' ') s.remove_prefix(1);
         while (!s.empty() && s.back() == L' ') s.remove_suffix(1);
         return s;
         };
-
     entry = trimSpaces(entry);
 
-    // Be forgiving if the user accidentally prefixes the whole line.
-    // Expected syntax is: "<process>.exe [titlePart|regex:<pattern>]".
-    std::wstring_view prefixRegex = L"regex:";
-    if (entry.length() > prefixRegex.length() && _wcsnicmp(entry.data(), prefixRegex.data(), prefixRegex.length()) == 0) {
-        entry = trimSpaces(entry.substr(prefixRegex.length()));
+    bool useWindowName = (UseWindowName.find(processName) != UseWindowName.end());
+    std::wstring matchTarget = useWindowName ? windowName : processName;
+
+    if (!useWindowName) {
+        if (entry.length() < processName.length() || _wcsnicmp(entry.data(), processName.c_str(), processName.length()) != 0)
+            return false;
     }
 
-    if (isStandard) {
-        bool useWindowName = (UseWindowName.find(processName) != UseWindowName.end());
-        std::wstring matchTarget = useWindowName ? windowName : processName;
+    std::wstring appNameEntryStr(entry);
+    std::wstring appName = GetCleanAppName(appNameEntryStr);
 
-        if (!useWindowName) {
-            if (entry.length() >= processName.length()) {
-                if (_wcsnicmp(entry.data(), processName.c_str(), processName.length()) != 0) return false;
-            }
-            else {
-                return false;
-            }
-        }
+    size_t firstSpace = appName.find(L' ');
+    std::wstring firstWord = (firstSpace == std::wstring::npos) ? appName : appName.substr(0, firstSpace);
 
-        std::wstring appNameEntryStr(entry);
-        std::wstring appName = GetCleanAppName(appNameEntryStr);
+    bool firstWordHasExtension = (firstWord.find(L'.') != std::wstring::npos);
 
-        size_t firstSpace = appName.find(L' ');
-        std::wstring firstWord = (firstSpace == std::wstring::npos) ? appName : appName.substr(0, firstSpace);
-
-        bool firstWordHasExtension = (firstWord.find(L'.') != std::wstring::npos);
-
-        if (firstWordHasExtension) {
-            if (useWindowName) return false;
-
-            std::wstring titlePart = (firstSpace != std::wstring::npos) ? appName.substr(firstSpace + 1) : L"";
-            if (firstWord == L"thunderbird.exe" && titlePart.empty()) {
-                titlePart = L" - Mozilla Thunderbird";
-            }
-
-            if (processName == firstWord) {
-                if (CheckTitleMatch(windowName, titlePart)) {
-                    result.matched = true;
-                    return true;
-                }
-            }
-        }
-        else {
-            if (useWindowName) {
-                if (matchTarget.find(appName) != std::wstring::npos) {
-                    result.matched = true;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // Is graphical
-    if (entry.length() < processName.length()) return false;
-    if (_wcsnicmp(entry.data(), processName.c_str(), processName.length()) != 0) return false;
-
-    if (entry.length() > processName.length() && entry[processName.length()] != L' ') return false;
-
-    std::wstring_view remainder;
-    if (entry.length() > processName.length()) {
-        remainder = entry.substr(processName.length());
-        size_t firstNonSpace = remainder.find_first_not_of(L" ");
-        if (firstNonSpace != std::wstring_view::npos) {
-            remainder = remainder.substr(firstNonSpace);
-        }
-        else {
-            remainder = std::wstring_view();
+    if (firstWordHasExtension) {
+        if (useWindowName) return false;
+        std::wstring titlePart = (firstSpace != std::wstring::npos) ? appName.substr(firstSpace + 1) : L"";
+        if (processName == firstWord) {
+            return CheckTitleMatch(windowName, titlePart);
         }
     }
-
-    std::wstring_view titlePart = remainder;
-    int w = 0, h = 0;
-
-    if (ParseDimensions(remainder, w, h, titlePart)) {
-        result.customWidth = w;
-        result.customHeight = h;
-    }
-
-    if (!CheckTitleMatch(windowName, titlePart)) {
-        return false;
-    }
-
-    result.matched = true;
-    return true;
-}
-
-bool MatchesStandardApp(const std::wstring& processName, const std::wstring& windowNameStr) {
-    if (processName == NAME L".exe" && windowNameStr == NAME) {
-        return true;
-    }
-
-    AppMatchResult result;
-    for (int i = 0; i < _pSharedData->standardCount; i++) {
-        if (CheckAppMatch(_pSharedData->standardApps[i], processName, windowNameStr, true, result)) {
+    else {
+        if (useWindowName && matchTarget.find(appName) != std::wstring::npos) {
             return true;
         }
     }
     return false;
 }
 
-bool MatchesgraphicalApp(const std::wstring& processName, const std::wstring& windowName, int& customWidth, int& customHeight) {
-    customWidth = 0;
-    customHeight = 0;
+bool CheckGraphicalMatch(const wchar_t* rawEntry, const std::wstring& processName, const std::wstring& windowName, int& customWidth, int& customHeight) {
+    if (rawEntry[0] == L'\0') return false;
+    std::wstring_view entry(rawEntry);
+    entry = TrimSpaces(entry);
+    if (entry.empty()) return false;
 
-    if (_pSharedData) {
-        AppMatchResult result;
-        for (int i = 0; i < _pSharedData->graphicalCount; i++) {
-            if (CheckAppMatch(_pSharedData->graphicalApps[i], processName, windowName, false, result)) {
-                customWidth = result.customWidth;
-                customHeight = result.customHeight;
-                return true;
-            }
+    size_t firstSpace = entry.find(L' ');
+    std::wstring_view firstToken = (firstSpace == std::wstring_view::npos) ? entry : entry.substr(0, firstSpace);
+    const bool entryHasProcessToken = EndsWithCase(firstToken, L".exe");
+
+    std::wstring_view remainder;
+
+    if (entryHasProcessToken) {
+        if (firstToken != std::wstring_view(processName)) {
+            return false;
+        }
+
+        if (entry.length() > processName.length()) {
+            remainder = TrimSpaces(entry.substr(processName.length()));
         }
     }
-    return false;
+    else {
+        remainder = entry;
+    }
+
+    std::wstring_view titlePart = remainder;
+    int w = 0, h = 0;
+    (void)ParseDimensions(remainder, w, h, titlePart);
+
+    titlePart = TrimSpaces(titlePart);
+
+    // firefox and thunderbird checks
+    if (processName == L"firefox.exe" && titlePart.empty()) {
+        return false;
+    }
+    if (processName == L"thunderbird.exe" && titlePart.empty()) {
+        titlePart = L" - Mozilla Thunderbird";
+    }
+
+    if (!CheckTitleMatch(windowName, titlePart)) {
+        return false;
+    }
+
+    customWidth = w;
+    customHeight = h;
+    return true;
 }
 
-bool DLLIMPORT appCheck(HWND hwnd, bool RClick) {
+bool appCheckStandard(HWND hwnd, bool RClick) {
     if (!AccessSharedMemory() || !_pSharedData)
         return false;
 
@@ -423,9 +384,72 @@ bool DLLIMPORT appCheck(HWND hwnd, bool RClick) {
         return true;
     }
 
-    return MatchesStandardApp(processName, windowName);
+    if (processName == NAME L".exe" && windowName == NAME) {
+        return true;
+    }
+
+    // exclude thunderbird and firefox
+    if (processName == L"thunderbird.exe" || processName == L"firefox.exe") {
+        return false;
+    }
+
+    for (int i = 0; i < _pSharedData->standardCount; i++) {
+        if (CheckStandardMatch(_pSharedData->standardApps[i], processName, windowName)) {
+            return true;
+        }
+    }
+    return false;
 }
 
+bool appCheckGraphical(HWND hwnd, int& customWidth, int& customHeight) {
+    customWidth = 0;
+    customHeight = 0;
+
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+
+    std::wstring processName, windowName;
+    if (IsExcluded(hwnd, processName, windowName)) {
+        return false;
+    }
+    for (int i = 0; i < _pSharedData->graphicalCount; i++) {
+        int w = 0;
+        int h = 0;
+        if (CheckGraphicalMatch(_pSharedData->graphicalApps[i], processName, windowName, w, h)) {
+            customWidth = w;
+            customHeight = h;
+            return true;
+        }
+    }
+
+    // Special case for firefox and thunderbird
+    if (processName == L"firefox.exe" || processName == L"thunderbird.exe") {
+        for (int i = 0; i < _pSharedData->standardCount; i++) {
+            int w = 0;
+            int h = 0;
+            if (CheckGraphicalMatch(_pSharedData->standardApps[i], processName, windowName, w, h)) {
+                customWidth = w;
+                customHeight = h;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool DLLIMPORT appCheck(HWND hwnd, bool RClick) {
+    if (!AccessSharedMemory() || !_pSharedData)
+        return false;
+
+    std::wstring processName, windowName;
+    if (IsExcluded(hwnd, processName, windowName)) {
+        return false;
+    }
+
+    int customWidth = 0, customHeight = 0;
+    return appCheckGraphical(hwnd, customWidth, customHeight) || appCheckStandard(hwnd, RClick);
+}
 
 LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode < 0)
@@ -437,7 +461,7 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
     bool isRight = (wParam == WM_NCRBUTTONDOWN || wParam == WM_NCRBUTTONUP);
 
-    if (!appCheck(info->hwnd, isRight)) {
+    if (!appCheckStandard(info->hwnd, isRight)) {
         return CallNextHookEx(_hMouse, nCode, wParam, lParam);
     }
 
@@ -514,20 +538,15 @@ LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         std::wstring processName;
 
         if (hwnd == _lastCachedHwnd && _lastCachedHwnd != NULL) {
-            if (!_lastCachedResult) {
-                return CallNextHookEx(_hLLMouse, nCode, wParam, lParam);
-            }
+            shouldProcess = _lastCachedResult;
             customWidth = _lastCachedWidth;
             customHeight = _lastCachedHeight;
             processName = _lastCachedProcess;
-            shouldProcess = true;
         }
         else {
-            std::wstring windowName;
-            if (!IsExcluded(hwnd, processName, windowName)) {
-                if (!processName.empty() && MatchesgraphicalApp(processName, windowName, customWidth, customHeight)) {
-                    shouldProcess = true;
-                }
+            shouldProcess = appCheckGraphical(hwnd, customWidth, customHeight);
+            if (shouldProcess) {
+                processName = getProcessName(hwnd);
             }
 
             _lastCachedHwnd = hwnd;
