@@ -14,7 +14,7 @@ inline const std::unordered_set<std::wstring> UseWindowName = { L"chrome.exe", L
 #define MAX_SPECIAL_APPS 16
 
 #define NAME L"Trayy"
-#define VERSION L"v3.0"
+#define VERSION L"v3.1"
 #define SETTINGS_FILE L".settings.ini"
 #define ABOUT_URL L"https://www.github.com/alirezagsm/Trayy"
 
