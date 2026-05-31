@@ -291,35 +291,27 @@ bool CheckStandardMatch(const wchar_t* rawEntry, const std::wstring& processName
         return s;
         };
     entry = trimSpaces(entry);
+    if (entry.empty()) return false;
 
     bool useWindowName = (UseWindowName.find(processName) != UseWindowName.end());
-    std::wstring matchTarget = useWindowName ? windowName : processName;
 
-    if (!useWindowName) {
-        if (entry.length() < processName.length() || _wcsnicmp(entry.data(), processName.c_str(), processName.length()) != 0)
-            return false;
+    // Check if entry starts with processName (handles spaces in names and browser .exe entries)
+    if (entry.length() >= processName.length() &&
+        _wcsnicmp(entry.data(), processName.c_str(), processName.length()) == 0 &&
+        (entry.length() == processName.length() || entry[processName.length()] == L' ')) {
+        std::wstring_view titlePart = (entry.length() > processName.length())
+            ? trimSpaces(entry.substr(processName.length()))
+            : std::wstring_view();
+        return CheckTitleMatch(windowName, titlePart);
     }
 
-    std::wstring appNameEntryStr(entry);
-    std::wstring appName = GetCleanAppName(appNameEntryStr);
-
-    size_t firstSpace = appName.find(L' ');
-    std::wstring firstWord = (firstSpace == std::wstring::npos) ? appName : appName.substr(0, firstSpace);
-
-    bool firstWordHasExtension = (firstWord.find(L'.') != std::wstring::npos);
-
-    if (firstWordHasExtension) {
-        if (useWindowName) return false;
-        std::wstring titlePart = (firstSpace != std::wstring::npos) ? appName.substr(firstSpace + 1) : L"";
-        if (processName == firstWord) {
-            return CheckTitleMatch(windowName, titlePart);
-        }
+    // No process match - for browsers, match as window title substring
+    if (useWindowName) {
+        std::wstring appName(entry);
+        appName = GetCleanAppName(appName);
+        return windowName.find(appName) != std::wstring::npos;
     }
-    else {
-        if (useWindowName && matchTarget.find(appName) != std::wstring::npos) {
-            return true;
-        }
-    }
+
     return false;
 }
 
@@ -329,22 +321,22 @@ bool CheckGraphicalMatch(const wchar_t* rawEntry, const std::wstring& processNam
     entry = TrimSpaces(entry);
     if (entry.empty()) return false;
 
-    size_t firstSpace = entry.find(L' ');
-    std::wstring_view firstToken = (firstSpace == std::wstring_view::npos) ? entry : entry.substr(0, firstSpace);
-    const bool entryHasProcessToken = EndsWithCase(firstToken, L".exe");
-
     std::wstring_view remainder;
 
-    if (entryHasProcessToken) {
-        if (firstToken != std::wstring_view(processName)) {
-            return false;
-        }
-
+    // Check if entry starts with processName (handles spaces in process names)
+    if (entry.length() >= processName.length() &&
+        _wcsnicmp(entry.data(), processName.c_str(), processName.length()) == 0 &&
+        (entry.length() == processName.length() || entry[processName.length()] == L' ')) {
         if (entry.length() > processName.length()) {
             remainder = TrimSpaces(entry.substr(processName.length()));
         }
     }
     else {
+        size_t firstSpace = entry.find(L' ');
+        std::wstring_view firstToken = (firstSpace == std::wstring_view::npos) ? entry : entry.substr(0, firstSpace);
+        if (EndsWithCase(firstToken, L".exe")) {
+            return false;
+        }
         remainder = entry;
     }
 
