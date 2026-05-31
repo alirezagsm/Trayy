@@ -42,6 +42,7 @@ static ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
 static IDXGISwapChain* g_pSwapChain = nullptr;
 static UINT g_ResizeWidth = 0, g_ResizeHeight = 0;
 static ID3D11RenderTargetView* g_mainRenderTargetView = nullptr;
+static ImFont* g_boldFont = nullptr;
 
 // Protects the UI-side cache of app names when updated from the UI thread
 static std::mutex g_appCacheMutex;
@@ -395,6 +396,8 @@ bool InitializeImGui(HWND hwnd) {
     if (mainFont) {
         io.FontDefault = mainFont;
     }
+    g_boldFont = io.Fonts->AddFontFromFileTTF(DEFAULT_BFONT_PATH, fontSize);
+    if (!g_boldFont) g_boldFont = mainFont ? mainFont : io.Fonts->Fonts[0];
 
     // Setup backends
     ImGui_ImplWin32_Init(hwnd);
@@ -506,10 +509,7 @@ void customText(ImFont* font, const ImVec4& color, const char* text) {
 
 void RenderMainUI() {
     static bool showHelpOverlay = false;
-    ImFont* boldFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(DEFAULT_BFONT_PATH, FONT_SIZE * 1.0f);
-    if (!boldFont) {
-        boldFont = ImGui::GetIO().Fonts->Fonts[0];
-    }
+    ImFont* boldFont = g_boldFont ? g_boldFont : ImGui::GetIO().Fonts->Fonts[0];
     // OutputDebugStringW(L"Rendering Main UI\n");
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
